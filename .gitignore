@@ -1,0 +1,18 @@
+# --- Global Security 
+.env
+.env.local
+.DS_Store
+
+# --- Frontend ---
+frontend/node_modules/
+frontend/.next/
+frontend/build/
+frontend/dist/
+frontend/npm-debug.log
+frontend/yarn-error.log
+
+# --- Backend ---
+/backend/bin
+*.exe
+*.exe~
+*.dil
