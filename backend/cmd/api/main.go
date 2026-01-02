@@ -1,6 +1,8 @@
 package main
 
 import (
+	"backend/internal/handlers"
+	"backend/internal/repository"
 	"database/sql"
 	"fmt"
 	"log"
@@ -10,6 +12,10 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
+
+type Config struct {
+	DB repository.DatabaseRepo
+}
 
 func main() {
 	// 1. Load .env file
@@ -24,32 +30,30 @@ func main() {
 	user := os.Getenv("DB_USER")
 	password := os.Getenv("DB_PASSWORD")
 	dbname := os.Getenv("DB_NAME")
-	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
 
-	db, err := sql.Open("postgres", psqlInfo)
+	conn, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal("Could not open connection: ", err)
 	}
-	defer db.Close()
+	defer conn.Close()
 
-	// 3. Ping the database to test the connection
-	err = db.Ping()
-	if err != nil {
-		log.Fatal("Could not connect to database: ", err)
-	}
+	// Initialize repository )
+	repo := repository.NewPostgresDB(conn)
 
-	fmt.Println("------------------------------------------------")
-	fmt.Println("SUCCESS! Sucessfully connected to the database!")
-	fmt.Println("------------------------------------------------")
+	// Inject the repo into the config
+	h := handlers.NewHandler(repo)
 
+	// Setup router
 	r := gin.Default()
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message":         "pong",
-			"database_status": "connected",
-		})
-	})
 
+	// Define Routes
+	r.POST("/members", h.CreateMember)
+	r.GET("/members", h.GetAllMembers)
+	r.POST("/members/import", h.BulkCreateMembers)
+
+	// Run the server
+	log.Println("Server running on :8080")
 	r.Run(":8080")
 }
