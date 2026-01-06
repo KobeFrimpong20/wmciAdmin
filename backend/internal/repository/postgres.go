@@ -5,6 +5,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type PostgresDB struct {
@@ -111,4 +113,45 @@ func (p *PostgresDB) BulkCreateMembers(members []models.Member) error {
 	}
 
 	return tx.Commit()
+}
+
+func (p *PostgresDB) GetMemberByID(id int) (*models.Member, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `
+	SELECT
+		m.id, m.first_name, m.last_name, m.email, m.phone, m.address, m.status, m.joined_at,
+		COALESCE(ARRAY_AGG(d.name) FILTER (WHERE d.name IS NOT NULL), '{}') as department_names
+	FROM members m
+	LEFT JOIN member_departments md ON m.id = md.member_id
+	LEFT JOIN departments d ON md.department_id = d.id
+	WHERE m.id = $1
+	GROUP BY m.id
+	`
+
+	var member models.Member
+	var departmentNames []string
+
+	err := p.db.QueryRowContext(ctx, query, id).Scan(
+		&member.ID,
+		&member.FirstName,
+		&member.LastName,
+		&member.Email,
+		&member.Phone,
+		&member.Address,
+		&member.Status,
+		&member.JoinedAt,
+		pq.Array(&departmentNames),
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, name := range departmentNames {
+		member.Departments = append(member.Departments, models.Department{Name: name})
+	}
+
+	return &member, nil
 }

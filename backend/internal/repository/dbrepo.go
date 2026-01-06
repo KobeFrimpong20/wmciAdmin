@@ -5,7 +5,7 @@ import "backend/internal/models"
 type DatabaseRepo interface {
 	// --- Members ---
 	CreateMember(m models.Member) (int, error)
-	// GetMemberByID(id int) (models.Member, error)
+	GetMemberByID(id int) (*models.Member, error)
 	GetAllMembers() ([]models.Member, error)
 	BulkCreateMembers(members []models.Member) error
 	// UpdateMember(m models.Member) error

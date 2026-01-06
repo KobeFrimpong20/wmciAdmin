@@ -52,6 +52,7 @@ func main() {
 	r.POST("/members", h.CreateMember)
 	r.GET("/members", h.GetAllMembers)
 	r.POST("/members/import", h.BulkCreateMembers)
+	r.GET("/members/:memberID", h.GetMemberByID)
 
 	// Run the server
 	log.Println("Server running on :8080")
