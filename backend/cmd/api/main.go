@@ -51,7 +51,7 @@ func main() {
 	// Define Routes
 	r.POST("/members", h.CreateMember)
 	r.GET("/members", h.GetAllMembers)
-	r.POST("/members/import", h.BulkCreateMembers)
+	r.POST("/members/import", h.ImportMembers)
 	r.GET("/members/:memberID", h.GetMemberByID)
 
 	// Run the server

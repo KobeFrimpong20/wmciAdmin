@@ -39,7 +39,7 @@ func (h *Handler) CreateMember(c *gin.Context) {
 	c.JSON(http.StatusCreated, newMember)
 }
 
-func (h *Handler) BulkCreateMembers(c *gin.Context) {
+func (h *Handler) ImportMembers(c *gin.Context) {
 	var payload []models.Member
 
 	if err := c.ShouldBindJSON(&payload); err != nil {
@@ -48,7 +48,7 @@ func (h *Handler) BulkCreateMembers(c *gin.Context) {
 	}
 
 	go func() {
-		err := h.DB.BulkCreateMembers(payload)
+		err := h.DB.ImportMembers(payload)
 		if err != nil {
 			println("Background Bulk Import Failed")
 		} else {

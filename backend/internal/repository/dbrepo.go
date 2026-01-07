@@ -7,7 +7,7 @@ type DatabaseRepo interface {
 	CreateMember(m models.Member) (int, error)
 	GetMemberByID(id int) (*models.Member, error)
 	GetAllMembers() ([]models.Member, error)
-	BulkCreateMembers(members []models.Member) error
+	ImportMembers(members []models.Member) error
 	// UpdateMember(m models.Member) error
 	// DeleteMember(id int) error
 

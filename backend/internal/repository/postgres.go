@@ -81,7 +81,7 @@ func (p *PostgresDB) GetAllMembers() ([]models.Member, error) {
 	return members, nil
 }
 
-func (p *PostgresDB) BulkCreateMembers(members []models.Member) error {
+func (p *PostgresDB) ImportMembers(members []models.Member) error {
 
 	tx, err := p.db.Begin()
 
