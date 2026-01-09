@@ -63,7 +63,7 @@ func (h *Handler) ImportMembers(c *gin.Context) {
 }
 
 func (h *Handler) GetMemberByID(c *gin.Context) {
-	idStr := c.Param("memberID")
+	idStr := c.Param("id")
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -90,4 +90,30 @@ func (h *Handler) GetAllMembers(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, members)
+}
+
+func (h *Handler) UpdateMember(c *gin.Context) {
+	idStr := c.Param("id")
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error occured while reading JSON: ": err.Error()})
+		return
+	}
+
+	var payload models.Member
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error occured while reading JSON: ": err.Error()})
+		return
+	}
+
+	payload.ID = id
+
+	err = h.DB.UpdateMember(payload)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"Error occured while updating member: ": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Member updated successfully"})
 }

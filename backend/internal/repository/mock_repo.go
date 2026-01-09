@@ -82,3 +82,10 @@ func (m *MockDB) ImportMembers(members []models.Member) error {
 	}
 	return nil
 }
+
+func (m *MockDB) UpdateMember(member models.Member) error {
+	if m.ForceError {
+		return errors.New("failed to update member")
+	}
+	return nil
+}

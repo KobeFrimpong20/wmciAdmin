@@ -155,3 +155,37 @@ func (p *PostgresDB) GetMemberByID(id int) (*models.Member, error) {
 
 	return &member, nil
 }
+
+func (p *PostgresDB) UpdateMember(member models.Member) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback()
+
+	removeOldDeptQuery = `
+	DELETE
+	FROM member_departments
+	WHERE member_id = $1
+	`
+
+	addNewDeptQuery = `
+	INSERT INTO member_departments (member_id, department_id)
+	VALUES ($1, $2)
+	`
+
+	_, err = tx.Exec(removeOldDeptQuery, member.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, dept := range member.Departments {
+		_, err = tx.Exec(addNewDeptQuery, member.ID, dept.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
