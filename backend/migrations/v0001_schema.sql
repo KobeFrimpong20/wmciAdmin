@@ -1,6 +1,6 @@
 -- 1. USERS (System Admins / Staff)
 CREATE TABLE users (
-    user_id SERIAL PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     username VARCHAR(100) UNIQUE NOT NULL, -- Changed from user_name, added UNIQUE
     password_hash VARCHAR(255) NOT NULL,   -- NEVER store plain text passwords
     role VARCHAR(20) DEFAULT 'staff',      -- 'admin', 'staff', etc.

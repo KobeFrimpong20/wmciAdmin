@@ -6,11 +6,11 @@ import (
 
 // Users (Staff/Admins)
 type User struct {
-	UserID       int       `json:"user_id"`
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"-"` // The "-" means "Never send this in JSON"
-	Role         string    `json:"role"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID        int       `json:"id"`
+	Email     string    `json:"email"`
+	Password  string    `json:"password,omitempty"` // The "-" means "Never send this in JSON"
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Members
@@ -30,6 +30,39 @@ type Member struct {
 type Department struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+}
+
+// Intake represent the JSON payload from the frontend
+type IntakeForm struct {
+	// Part 1: Personal Information - Member Table data
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+	Phone     string `json:"phone"`
+	Address   string `json:"address"`
+
+	// Part 2 Application Table data
+	DateOfBirth   string `json:"date_of_birth"` // Format: YYYY-MM-DD
+	MaritalStatus string `json:"marital_status"`
+	SpouseName    string `json:"spouse_name"`
+	NumChildren   int    `json:"num_children"`
+
+	// Spiritual
+	BornAgain     bool   `json:"born_again"`
+	WaterBaptized bool   `json:"water_baptized"`
+	SpeakTongues  bool   `json:"speak_tongues"`
+	PrevChurch    string `json:"prev_church"`
+
+	// Commitments
+	AttendanceCommitment bool `json:"attendance_commitment"`
+	TitheCommitment      bool `json:"tithe_commitment"`
+	PrayerCommitment     bool `json:"prayer_commitment"`
+	SoberCommitment      bool `json:"sober_commitment"`
+	RespectCommitment    bool `json:"respect_commitment"`
+	FaithCommitment      bool `json:"faith_commitment"`
+
+	// Signatures
+	MemberSignatureDate *string `json:"member_signature_date"` // Format: YYYY-MM-DD
 }
 
 // Applications (The big form)

@@ -89,3 +89,63 @@ func (m *MockDB) UpdateMember(member models.Member) error {
 	}
 	return nil
 }
+
+func (m *MockDB) DeleteMember(id int) error {
+	if m.ForceError {
+		return errors.New("failed to delete member")
+	}
+	return nil
+}
+
+func (m *MockDB) GetAllDepartments() ([]models.Department, error) {
+	if m.ForceError {
+		return nil, errors.New("failed to get all departments")
+	}
+	return []models.Department{
+		{Name: "Choir"},
+		{Name: "Music"},
+		{Name: "Youth"},
+	}, nil
+}
+
+func (m *MockDB) GetMembersByDepartmentID(departmentID int) ([]models.Member, error) {
+	if m.ForceError {
+		return nil, errors.New("failed to get members by department ID")
+	}
+	dummyEmail := "dummy.member@example.com"
+	return []models.Member{
+		{
+			ID:        67,
+			FirstName: "Dummy",
+			LastName:  "Member",
+			Email:     &dummyEmail,
+			Departments: []models.Department{
+				{Name: "Choir"},
+			},
+			Status:   "Active",
+			JoinedAt: time.Now(),
+		},
+	}, nil
+}
+
+func (m *MockDB) GetUserByEmail(email string) (*models.User, error) {
+	if m.ForceError {
+		return nil, errors.New("failed to get user by email")
+	}
+	return &models.User{
+		ID:    67,
+		Email: "dummy.member@example.com",
+		Role:  "admin",
+	}, nil
+}
+
+func (m *MockDB) Login(email string, password string) (*models.User, error) {
+	if m.ForceError {
+		return nil, errors.New("failed to login")
+	}
+	return &models.User{
+		ID:    67,
+		Email: "dummy.member@example.com",
+		Role:  "admin",
+	}, nil
+}

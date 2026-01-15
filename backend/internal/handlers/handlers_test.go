@@ -198,3 +198,157 @@ func TestImportMembers(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestDeleteMember(t *testing.T) {
+
+	// Set up the mock repository
+	mockRepo := repository.NewMockDB()
+	h := NewHandler(mockRepo)
+
+	// Set up the gin router
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.DELETE("/members/:id", h.DeleteMember)
+
+	// ----------------------------------------
+	// CASE 1: Member Deleted Successfully
+	// ----------------------------------------
+
+	req, _ := http.NewRequest("DELETE", "/members/67", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// ----------------------------------------
+	// CASE 2: Member Deletion Failed
+	// ----------------------------------------
+
+	mockRepo.ForceError = true
+	req, _ = http.NewRequest("DELETE", "/members/67", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestGetAllDepartments(t *testing.T) {
+
+	// Set up the mock repository
+	mockRepo := repository.NewMockDB()
+	h := NewHandler(mockRepo)
+
+	// Set up the gin router
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.GET("/departments", h.GetAllDepartments)
+
+	// ----------------------------------------
+	// CASE 1: Departments Retrieved Successfully
+	// ----------------------------------------
+
+	req, _ := http.NewRequest("GET", "/departments", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// ----------------------------------------
+	// CASE 2: Departments Retrieval Failed
+	// ----------------------------------------
+
+	mockRepo.ForceError = true
+	req, _ = http.NewRequest("GET", "/departments", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestGetMembersByDepartmentID(t *testing.T) {
+
+	// Set up the mock repository
+	mockRepo := repository.NewMockDB()
+	h := NewHandler(mockRepo)
+
+	// Set up the gin router
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.GET("/members/departments/:id", h.GetMembersByDepartmentID)
+
+	// ----------------------------------------
+	// CASE 1: Members Retrieved Successfully
+	// ----------------------------------------
+
+	req, _ := http.NewRequest("GET", "/members/departments/1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// ----------------------------------------
+	// CASE 2: Members Retrieval Failed
+	// ----------------------------------------
+
+	mockRepo.ForceError = true
+	req, _ = http.NewRequest("GET", "/members/departments/1", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+func TestLogin(t *testing.T) {
+
+	// Set up the mock repository
+	mockRepo := repository.NewMockDB()
+	h := NewHandler(mockRepo)
+
+	// Set up the gin router
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.POST("/login", h.Login)
+
+	// ----------------------------------------
+	// CASE 1: Login Successful
+	// ----------------------------------------
+
+	req, _ := http.NewRequest("POST", "/login", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// ----------------------------------------
+	// CASE 2: Login Failed
+	// ----------------------------------------
+
+	mockRepo.ForceError = true
+	req, _ = http.NewRequest("POST", "/login", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestGetUserByEmail(t *testing.T) {
+
+	// Set up the mock repository
+	mockRepo := repository.NewMockDB()
+	h := NewHandler(mockRepo)
+
+	// Set up the gin router
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.GET("/users/:email", h.GetUserByEmail)
+
+	// ----------------------------------------
+	// CASE 1: User Retrieved Successfully
+	// ----------------------------------------
+
+	req, _ := http.NewRequest("GET", "/users/dummy.member@example.com", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// ----------------------------------------
+	// CASE 2: User Retrieval Failed
+	// ----------------------------------------
+
+	mockRepo.ForceError = true
+	req, _ = http.NewRequest("GET", "/users/dummy.member@example.com", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
