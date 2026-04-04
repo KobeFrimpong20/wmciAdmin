@@ -60,6 +60,7 @@ func main() {
 	// Public Routes (The Lobby)
 	r.POST("/login", h.Login)
 	r.PUT("/applications/:id/approve", h.ApproveApplication)
+	r.POST("/applications", h.SubmitApplication)
 
 	// Protected Routes (The Club)
 	protected := r.Group("/")
@@ -69,12 +70,13 @@ func main() {
 		protected.GET("/members", h.GetAllMembers)
 		protected.POST("/members/import", h.ImportMembers)
 		protected.GET("/members/:id", h.GetMemberByID)
+		protected.GET("/members/:id/application", h.GetMemberApplication)
+		protected.PUT("/members/:id/application", h.UpdateApplication)
 		protected.PUT("/members/:id", h.UpdateMember)
 		protected.DELETE("/members/:id", h.DeleteMember)
 		protected.GET("/departments", h.GetAllDepartments)
 		protected.GET("/members/departments/:id", h.GetMembersByDepartmentID)
 		protected.GET("/users/:email", h.GetUserByEmail)
-		protected.POST("/applications", h.SubmitApplication)
 	}
 
 	r.GET("/debug/hash/:password", func(c *gin.Context) {

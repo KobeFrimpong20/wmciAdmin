@@ -17,12 +17,12 @@ func TestGetMemberByID(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
 	r := gin.Default()
-	r.GET("/members/:memberID", h.GetMemberByID)
+	r.GET("/members/:id", h.GetMemberByID)
 
 	// ----------------------------------------
 	// CASE 1: Valid ID (Member exists)
@@ -55,7 +55,7 @@ func TestGetAllMembers(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -94,7 +94,7 @@ func TestCreateMember(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -146,7 +146,7 @@ func TestImportMembers(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -203,7 +203,7 @@ func TestDeleteMember(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -234,7 +234,7 @@ func TestGetAllDepartments(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -265,7 +265,7 @@ func TestGetMembersByDepartmentID(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -295,7 +295,7 @@ func TestLogin(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -306,7 +306,9 @@ func TestLogin(t *testing.T) {
 	// CASE 1: Login Successful
 	// ----------------------------------------
 
-	req, _ := http.NewRequest("POST", "/login", nil)
+	reqBodyPass := `{"email": "dummy.member@example.com", "password": "password"}`
+	req, _ := http.NewRequest("POST", "/login", bytes.NewBuffer([]byte(reqBodyPass)))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -316,17 +318,19 @@ func TestLogin(t *testing.T) {
 	// ----------------------------------------
 
 	mockRepo.ForceError = true
-	req, _ = http.NewRequest("POST", "/login", nil)
+	reqBody := `{"email": "dummy.member@example.com", "password": "password"}`
+	req, _ = http.NewRequest("POST", "/login", bytes.NewBuffer([]byte(reqBody)))
+	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestGetUserByEmail(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo)
+	h := NewHandler(mockRepo, "secret")
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -348,6 +352,50 @@ func TestGetUserByEmail(t *testing.T) {
 
 	mockRepo.ForceError = true
 	req, _ = http.NewRequest("GET", "/users/dummy.member@example.com", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestGetMemberApplication(t *testing.T) {
+
+	// Set up the mock repository
+	mockRepo := repository.NewMockDB()
+	h := NewHandler(mockRepo, "secret")
+
+	// Set up the gin router
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.GET("/members/:id/application", h.GetMemberApplication)
+
+	// ----------------------------------------
+	// CASE 1: Application Retrieved Successfully
+	// ----------------------------------------
+
+	req, _ := http.NewRequest("GET", "/members/67/application", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response models.Application
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, 67, response.MemberID)
+	assert.Equal(t, "Single", response.MaritalStatus)
+
+	// ----------------------------------------
+	// CASE 2: Application Not Found
+	// ----------------------------------------
+	req, _ = http.NewRequest("GET", "/members/999/application", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	// ----------------------------------------
+	// CASE 3: Internal Server Error
+	// ----------------------------------------
+	mockRepo.ForceError = true
+	req, _ = http.NewRequest("GET", "/members/67/application", nil)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
