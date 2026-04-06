@@ -8,7 +8,7 @@ import (
 type User struct {
 	ID        int       `json:"id"`
 	Email     string    `json:"email"`
-	Password  string    `json:"password,omitempty"` // The "-" means "Never send this in JSON"
+	Password  string    `json:"-"` // Never serialize password hash in API responses
 	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 }

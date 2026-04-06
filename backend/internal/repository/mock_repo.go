@@ -133,8 +133,9 @@ func (m *MockDB) GetUserByEmail(email string) (*models.User, error) {
 		return nil, errors.New("failed to get user by email")
 	}
 	return &models.User{
-		ID:       67,
-		Email:    "dummy.member@example.com",
+		ID:    67,
+		Email: "dummy.member@example.com",
+		// bcrypt hash of "password" — needed for TestLogin to exercise bcrypt.CompareHashAndPassword
 		Password: "$2a$12$hN0qFxY2xRnbOKgcvgeh3ezhr1dACHa4fieuIauHbo8BrO.gHWfay",
 		Role:     "admin",
 	}, nil
