@@ -359,6 +359,46 @@ func TestGetUserByEmail(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
+func TestGetMemberByIDLeadScope(t *testing.T) {
+	mockRepo := repository.NewMockDB()
+	h := NewHandler(mockRepo, testJWTSecret)
+
+	gin.SetMode(gin.TestMode)
+
+	// leadMiddleware injects role and department_id into the gin context, simulating AuthMiddleware
+	leadMiddleware := func(deptID float64) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			c.Set("role", "lead")
+			c.Set("department_id", deptID)
+			c.Next()
+		}
+	}
+
+	// ----------------------------------------
+	// CASE 1: Lead accesses a member in their department (dept 1 = Choir)
+	// ----------------------------------------
+	r := gin.New()
+	r.Use(leadMiddleware(1))
+	r.GET("/members/:id", h.GetMemberByID)
+
+	req, _ := http.NewRequest("GET", "/members/67", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// ----------------------------------------
+	// CASE 2: Lead accesses a member NOT in their department (dept 2 != Choir)
+	// ----------------------------------------
+	r2 := gin.New()
+	r2.Use(leadMiddleware(2))
+	r2.GET("/members/:id", h.GetMemberByID)
+
+	req, _ = http.NewRequest("GET", "/members/67", nil)
+	w = httptest.NewRecorder()
+	r2.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
 func TestGetMemberApplication(t *testing.T) {
 
 	// Set up the mock repository

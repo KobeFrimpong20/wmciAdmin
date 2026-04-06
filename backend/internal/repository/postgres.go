@@ -342,7 +342,7 @@ func (p *PostgresDB) GetUserByEmail(email string) (*models.User, error) {
 	defer cancel()
 
 	query := `
-	SELECT id, email, password_hash, role
+	SELECT id, email, password_hash, role, department_id
 	FROM users
 	WHERE email = $1
 	`
@@ -356,6 +356,7 @@ func (p *PostgresDB) GetUserByEmail(email string) (*models.User, error) {
 		&user.Email,
 		&hashedPassword,
 		&user.Role,
+		&user.DepartmentID,
 	)
 	if err != nil {
 		return nil, err
@@ -463,6 +464,71 @@ func (p *PostgresDB) ApproveApplication(appID int) error {
 	}
 
 	return tx.Commit()
+}
+
+func (p *PostgresDB) GetApplicationByID(appID int) (*models.Application, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `
+	SELECT id, member_id, date_of_birth, marital_status, spouse_name, num_children,
+	born_again, water_baptized, speak_tongues, prev_church,
+	attendance_commitment, tithe_commitment, prayer_commitment,
+	sober_commitment, respect_commitment, faith_commitment,
+	pastor_signature_date, member_signature_date, created_at
+	FROM applications
+	WHERE id = $1
+	`
+
+	var app models.Application
+	var sqlSpouseName sql.NullString
+	var sqlPrevChurch sql.NullString
+	var sqlPastorDate sql.NullTime
+	var sqlMemberDate sql.NullTime
+	var sqlDOB sql.NullTime
+
+	err := p.db.QueryRowContext(ctx, query, appID).Scan(
+		&app.ID,
+		&app.MemberID,
+		&sqlDOB,
+		&app.MaritalStatus,
+		&sqlSpouseName,
+		&app.NumChildren,
+		&app.BornAgain,
+		&app.WaterBaptized,
+		&app.SpeakTongues,
+		&sqlPrevChurch,
+		&app.AttendanceCommitment,
+		&app.TitheCommitment,
+		&app.PrayerCommitment,
+		&app.SoberCommitment,
+		&app.RespectCommitment,
+		&app.FaithCommitment,
+		&sqlPastorDate,
+		&sqlMemberDate,
+		&app.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("application not found")
+		}
+		return nil, err
+	}
+
+	app.SpouseName = sqlSpouseName.String
+	app.PrevChurch = sqlPrevChurch.String
+	if sqlDOB.Valid {
+		app.DateOfBirth = sqlDOB.Time
+	}
+	if sqlPastorDate.Valid {
+		app.PastorSignatureDate = &sqlPastorDate.Time
+	}
+	if sqlMemberDate.Valid {
+		app.MemberSignatureDate = &sqlMemberDate.Time
+	}
+
+	return &app, nil
 }
 
 func (p *PostgresDB) GetApplicationByMemberID(memberID int) (*models.Application, error) {

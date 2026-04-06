@@ -25,6 +25,34 @@ func NewHandler(db repository.DatabaseRepo, secret string) *Handler {
 	}
 }
 
+// getDepartmentScope returns (isLead bool, departmentID int).
+// For admins, isLead=false. For leads, isLead=true with their department ID.
+func getDepartmentScope(c *gin.Context) (isLead bool, departmentID int) {
+	role, _ := c.Get("role")
+	if role != "lead" {
+		return false, 0
+	}
+	raw, exists := c.Get("department_id")
+	if !exists || raw == nil {
+		return false, 0
+	}
+	// JWT numbers decode as float64
+	if f, ok := raw.(float64); ok {
+		return true, int(f)
+	}
+	return false, 0
+}
+
+// memberBelongsToDept checks whether any of the member's departments match the given department ID.
+func memberBelongsToDept(member *models.Member, deptID int) bool {
+	for _, d := range member.Departments {
+		if d.ID == deptID {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *Handler) CreateMember(c *gin.Context) {
 	var newMember models.Member
 
@@ -87,11 +115,28 @@ func (h *Handler) GetMemberByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"Error occured while getting member: ": err.Error()})
 		return
 	}
+
+	isLead, deptID := getDepartmentScope(c)
+	if isLead && !memberBelongsToDept(member, deptID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
 	c.JSON(http.StatusOK, member)
 }
 
 func (h *Handler) GetAllMembers(c *gin.Context) {
-	members, err := h.DB.GetAllMembers()
+	isLead, deptID := getDepartmentScope(c)
+
+	var members []models.Member
+	var err error
+
+	if isLead {
+		members, err = h.DB.GetMembersByDepartmentID(deptID)
+	} else {
+		members, err = h.DB.GetAllMembers()
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"Error occured while getting members: ": err.Error()})
 		return
@@ -106,6 +151,19 @@ func (h *Handler) UpdateMember(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"Error occured while reading JSON: ": err.Error()})
 		return
+	}
+
+	isLead, deptID := getDepartmentScope(c)
+	if isLead {
+		member, err := h.DB.GetMemberByID(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
+			return
+		}
+		if !memberBelongsToDept(member, deptID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return
+		}
 	}
 
 	var payload models.Member
@@ -132,6 +190,19 @@ func (h *Handler) DeleteMember(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"Error occured while reading JSON: ": err.Error()})
 		return
+	}
+
+	isLead, deptID := getDepartmentScope(c)
+	if isLead {
+		member, err := h.DB.GetMemberByID(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
+			return
+		}
+		if !memberBelongsToDept(member, deptID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return
+		}
 	}
 
 	err = h.DB.DeleteMember(id)
@@ -208,9 +279,10 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"subject": user.ID,
-		"role":    user.Role,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+		"subject":       user.ID,
+		"role":          user.Role,
+		"department_id": user.DepartmentID,
+		"exp":           time.Now().Add(time.Hour * 24).Unix(),
 	})
 
 	tokenString, err := token.SignedString([]byte(h.JWTSecret))
@@ -254,6 +326,25 @@ func (h *Handler) ApproveApplication(c *gin.Context) {
 		return
 	}
 
+	isLead, deptID := getDepartmentScope(c)
+	if isLead {
+		// Fetch the application to get the member_id, then check department membership
+		app, err := h.DB.GetApplicationByID(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Application not found"})
+			return
+		}
+		member, err := h.DB.GetMemberByID(app.MemberID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
+			return
+		}
+		if !memberBelongsToDept(member, deptID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return
+		}
+	}
+
 	err = h.DB.ApproveApplication(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to approve application"})
@@ -269,6 +360,19 @@ func (h *Handler) GetMemberApplication(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"Error occured while reading JSON: ": err.Error()})
 		return
+	}
+
+	isLead, deptID := getDepartmentScope(c)
+	if isLead {
+		member, err := h.DB.GetMemberByID(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
+			return
+		}
+		if !memberBelongsToDept(member, deptID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return
+		}
 	}
 
 	app, err := h.DB.GetApplicationByMemberID(id)
