@@ -13,11 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testJWTSecret = "test-only-not-for-production"
+
 func TestGetMemberByID(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -55,7 +57,7 @@ func TestGetAllMembers(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -94,7 +96,7 @@ func TestCreateMember(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -146,7 +148,7 @@ func TestImportMembers(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -203,7 +205,7 @@ func TestDeleteMember(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -234,7 +236,7 @@ func TestGetAllDepartments(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -265,7 +267,7 @@ func TestGetMembersByDepartmentID(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -295,7 +297,7 @@ func TestLogin(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -330,7 +332,7 @@ func TestGetUserByEmail(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
@@ -361,7 +363,7 @@ func TestGetMemberApplication(t *testing.T) {
 
 	// Set up the mock repository
 	mockRepo := repository.NewMockDB()
-	h := NewHandler(mockRepo, "secret")
+	h := NewHandler(mockRepo, testJWTSecret)
 
 	// Set up the gin router
 	gin.SetMode(gin.TestMode)
