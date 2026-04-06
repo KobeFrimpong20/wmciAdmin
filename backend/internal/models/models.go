@@ -6,11 +6,12 @@ import (
 
 // Users (Staff/Admins)
 type User struct {
-	ID        int       `json:"id"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"` // Never serialize password hash in API responses
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           int       `json:"id"`
+	Email        string    `json:"email"`
+	Password     string    `json:"-"` // Never serialize password hash in API responses
+	Role         string    `json:"role"`
+	DepartmentID *int      `json:"department_id"` // nil = admin (global), non-nil = lead (scoped)
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Members

@@ -24,7 +24,7 @@ func (m *MockDB) GetMemberByID(id int) (*models.Member, error) {
 			LastName:  "Member",
 			Email:     &userEmail,
 			Departments: []models.Department{
-				{Name: "Choir"},
+				{ID: 1, Name: "Choir"},
 			},
 			Status:   "Active",
 			JoinedAt: time.Now(),
@@ -132,12 +132,14 @@ func (m *MockDB) GetUserByEmail(email string) (*models.User, error) {
 	if m.ForceError {
 		return nil, errors.New("failed to get user by email")
 	}
+	deptID := 1
 	return &models.User{
 		ID:    67,
 		Email: "dummy.member@example.com",
 		// bcrypt hash of "password" — needed for TestLogin to exercise bcrypt.CompareHashAndPassword
-		Password: "$2a$12$hN0qFxY2xRnbOKgcvgeh3ezhr1dACHa4fieuIauHbo8BrO.gHWfay",
-		Role:     "admin",
+		Password:     "$2a$12$hN0qFxY2xRnbOKgcvgeh3ezhr1dACHa4fieuIauHbo8BrO.gHWfay",
+		Role:         "admin",
+		DepartmentID: &deptID,
 	}, nil
 }
 
@@ -158,6 +160,19 @@ func (m *MockDB) SubmitIntake(form models.IntakeForm) error {
 
 func (m *MockDB) ApproveApplication(appID int) error {
 	return nil
+}
+
+func (m *MockDB) GetApplicationByID(appID int) (*models.Application, error) {
+	if m.ForceError {
+		return nil, errors.New("failed to get application")
+	}
+	if appID != 1 {
+		return nil, errors.New("application not found")
+	}
+	return &models.Application{
+		ID:       1,
+		MemberID: 67,
+	}, nil
 }
 
 func (m *MockDB) GetApplicationByMemberID(memberID int) (*models.Application, error) {

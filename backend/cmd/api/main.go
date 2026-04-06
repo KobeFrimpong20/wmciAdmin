@@ -59,7 +59,6 @@ func main() {
 	// Define Routes
 	// Public Routes (The Lobby)
 	r.POST("/login", h.Login)
-	r.PUT("/applications/:id/approve", h.ApproveApplication)
 	r.POST("/applications", h.SubmitApplication)
 
 	// Protected Routes (The Club)
@@ -77,6 +76,7 @@ func main() {
 		protected.GET("/departments", h.GetAllDepartments)
 		protected.GET("/members/departments/:id", h.GetMembersByDepartmentID)
 		protected.GET("/users/:email", h.GetUserByEmail)
+		protected.PUT("/applications/:id/approve", h.ApproveApplication)
 	}
 
 	r.GET("/debug/hash/:password", func(c *gin.Context) {
