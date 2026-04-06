@@ -16,8 +16,8 @@ type DatabaseRepo interface {
 	SubmitIntake(form models.IntakeForm) error
 	ApproveApplication(appID int) error
 	// CreateApplication(a models.Application) (int, error)
-	// GetApplicationByMemberID(memberID int) (models.Application, error)
-	// UpdateApplication(a models.Application) error
+	GetApplicationByMemberID(memberID int) (*models.Application, error)
+	UpdateApplication(a models.Application) error
 
 	// // --- Departments ---
 	GetAllDepartments() ([]models.Department, error)

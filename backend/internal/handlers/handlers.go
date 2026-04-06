@@ -262,3 +262,54 @@ func (h *Handler) ApproveApplication(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Application approved and signed by pastor"})
 }
+
+func (h *Handler) GetMemberApplication(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error occured while reading JSON: ": err.Error()})
+		return
+	}
+
+	app, err := h.DB.GetApplicationByMemberID(id)
+	if err != nil {
+		if err.Error() == "application not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Application not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, app)
+}
+
+func (h *Handler) UpdateApplication(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Member ID"})
+		return
+	}
+
+	var payload models.Application
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload: " + err.Error()})
+		return
+	}
+
+	// Enforce the endpoint URL's member ID protects the payload ID
+	payload.MemberID = id
+
+	err = h.DB.UpdateApplication(payload)
+	if err != nil {
+		if err.Error() == "application not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Application not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update application details"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Application updated successfully"})
+}

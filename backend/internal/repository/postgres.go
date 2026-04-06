@@ -386,6 +386,7 @@ func (p *PostgresDB) SubmitIntake(form models.IntakeForm) error {
 		form.Email,
 		form.Phone,
 		form.Address,
+		"pending",
 		time.Now(),
 	).Scan(&memberID)
 
@@ -396,7 +397,7 @@ func (p *PostgresDB) SubmitIntake(form models.IntakeForm) error {
 	queryApp := `
 		INSERT INTO applications (
 			member_id, date_of_birth, marital_status, spouse_name, num_children,
-			born_again, water_baptized, speak_togues, prev_church,
+			born_again, water_baptized, speak_tongues, prev_church,
 			attendance_commitment, tithe_commitment, prayer_commitment,
 			sober_commitment, respect_commitment, faith_commitment,
 		member_signature_date
@@ -463,3 +464,153 @@ func (p *PostgresDB) ApproveApplication(appID int) error {
 
 	return tx.Commit()
 }
+
+func (p *PostgresDB) GetApplicationByMemberID(memberID int) (*models.Application, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `
+	SELECT id, member_id, date_of_birth, marital_status, spouse_name, num_children,
+	born_again, water_baptized, speak_tongues, prev_church,
+	attendance_commitment, tithe_commitment, prayer_commitment,
+	sober_commitment, respect_commitment, faith_commitment,
+	pastor_signature_date, member_signature_date, created_at
+	FROM applications
+	WHERE member_id = $1
+	`
+
+	var app models.Application
+	
+	// Handles nullable strings and dates
+	var sqlSpouseName sql.NullString
+	var sqlPrevChurch sql.NullString
+	var sqlPastorDate sql.NullTime
+	var sqlMemberDate sql.NullTime
+	var sqlDOB sql.NullTime
+
+	err := p.db.QueryRowContext(ctx, query, memberID).Scan(
+		&app.ID,
+		&app.MemberID,
+		&sqlDOB,
+		&app.MaritalStatus,
+		&sqlSpouseName,
+		&app.NumChildren,
+		&app.BornAgain,
+		&app.WaterBaptized,
+		&app.SpeakTongues,
+		&sqlPrevChurch,
+		&app.AttendanceCommitment,
+		&app.TitheCommitment,
+		&app.PrayerCommitment,
+		&app.SoberCommitment,
+		&app.RespectCommitment,
+		&app.FaithCommitment,
+		&sqlPastorDate,
+		&sqlMemberDate,
+		&app.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("application not found")
+		}
+		return nil, err
+	}
+
+	app.SpouseName = sqlSpouseName.String
+	app.PrevChurch = sqlPrevChurch.String
+	if sqlDOB.Valid {
+		app.DateOfBirth = sqlDOB.Time
+	}
+	if sqlPastorDate.Valid {
+		app.PastorSignatureDate = &sqlPastorDate.Time
+	}
+	if sqlMemberDate.Valid {
+		app.MemberSignatureDate = &sqlMemberDate.Time
+	}
+
+	return &app, nil
+}
+
+func (p *PostgresDB) UpdateApplication(a models.Application) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `
+	UPDATE applications SET
+		date_of_birth = $1,
+		marital_status = $2,
+		spouse_name = $3,
+		num_children = $4,
+		born_again = $5,
+		water_baptized = $6,
+		speak_tongues = $7,
+		prev_church = $8,
+		attendance_commitment = $9,
+		tithe_commitment = $10,
+		prayer_commitment = $11,
+		sober_commitment = $12,
+		respect_commitment = $13,
+		faith_commitment = $14,
+		pastor_signature_date = $15,
+		member_signature_date = $16
+	WHERE member_id = $17
+	`
+
+	res, err := p.db.ExecContext(ctx, query,
+		a.DateOfBirth,
+		a.MaritalStatus,
+		a.SpouseName,
+		a.NumChildren,
+		a.BornAgain,
+		a.WaterBaptized,
+		a.SpeakTongues,
+		a.PrevChurch,
+		a.AttendanceCommitment,
+		a.TitheCommitment,
+		a.PrayerCommitment,
+		a.SoberCommitment,
+		a.RespectCommitment,
+		a.FaithCommitment,
+		a.PastorSignatureDate,
+		a.MemberSignatureDate,
+		a.MemberID,
+	)
+
+	if err != nil {
+		return err
+	}
+	
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	
+	if rowsAffected == 0 {
+		// UPSERT Fallback: If it did not exist, insert it now.
+		insertQuery := `
+		INSERT INTO applications (
+			member_id, date_of_birth, marital_status, spouse_name, num_children,
+			born_again, water_baptized, speak_tongues, prev_church,
+			attendance_commitment, tithe_commitment, prayer_commitment,
+			sober_commitment, respect_commitment, faith_commitment,
+			pastor_signature_date, member_signature_date, created_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+		)
+		`
+		_, err = p.db.ExecContext(ctx, insertQuery,
+			a.MemberID, a.DateOfBirth, a.MaritalStatus, a.SpouseName, a.NumChildren,
+			a.BornAgain, a.WaterBaptized, a.SpeakTongues, a.PrevChurch,
+			a.AttendanceCommitment, a.TitheCommitment, a.PrayerCommitment,
+			a.SoberCommitment, a.RespectCommitment, a.FaithCommitment,
+			a.PastorSignatureDate, a.MemberSignatureDate, time.Now(),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+

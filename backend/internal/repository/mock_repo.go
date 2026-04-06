@@ -135,7 +135,9 @@ func (m *MockDB) GetUserByEmail(email string) (*models.User, error) {
 	return &models.User{
 		ID:    67,
 		Email: "dummy.member@example.com",
-		Role:  "admin",
+		// bcrypt hash of "password" — needed for TestLogin to exercise bcrypt.CompareHashAndPassword
+		Password: "$2a$12$hN0qFxY2xRnbOKgcvgeh3ezhr1dACHa4fieuIauHbo8BrO.gHWfay",
+		Role:     "admin",
 	}, nil
 }
 
@@ -148,4 +150,51 @@ func (m *MockDB) Login(email string, password string) (*models.User, error) {
 		Email: "dummy.member@example.com",
 		Role:  "admin",
 	}, nil
+}
+
+func (m *MockDB) SubmitIntake(form models.IntakeForm) error {
+	return nil
+}
+
+func (m *MockDB) ApproveApplication(appID int) error {
+	return nil
+}
+
+func (m *MockDB) GetApplicationByMemberID(memberID int) (*models.Application, error) {
+	if m.ForceError {
+		return nil, errors.New("failed to get application")
+	}
+	
+	if memberID != 67 {
+		return nil, errors.New("application not found")
+	}
+
+	return &models.Application{
+		ID:                   1,
+		MemberID:             67,
+		DateOfBirth:          time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC),
+		MaritalStatus:        "Single",
+		SpouseName:           "",
+		NumChildren:          0,
+		BornAgain:            true,
+		WaterBaptized:        true,
+		SpeakTongues:         false,
+		PrevChurch:           "Previous Church Name",
+		AttendanceCommitment: true,
+		TitheCommitment:      true,
+		PrayerCommitment:     true,
+		SoberCommitment:      true,
+		RespectCommitment:    true,
+		FaithCommitment:      true,
+		MemberSignatureDate:  nil,
+		PastorSignatureDate:  nil,
+		CreatedAt:            time.Now(),
+	}, nil
+}
+
+func (m *MockDB) UpdateApplication(a models.Application) error {
+	if m.ForceError {
+		return errors.New("failed to update application")
+	}
+	return nil
 }
