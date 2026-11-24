@@ -2,17 +2,37 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { membersApi } from '../api/members';
 import type { Member, Application } from '../types/member';
-import {
-  ArrowLeft,
-  Loader2,
-  AlertCircle,
-  Mail,
-  Phone,
-  MapPin,
-  Clock,
-  FileText,
-  ChevronRight,
-} from 'lucide-react';
+import { PageShell } from '../components/PageShell';
+import { Button } from '../components/Button';
+import { AlertCircle, ArrowLeft, ChevronRight } from 'lucide-react';
+
+function formatDate(value: string): string {
+  if (!value) return 'Not recorded';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function formatDateTime(value: string): string {
+  if (!value) return 'Date unavailable';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function toTelHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
 
 const MemberDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -21,146 +41,200 @@ const MemberDetail = () => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!id) return;
     let isMounted = true;
 
-    const fetchData = async () => {
-      if (!id) return;
+    const loadMember = async () => {
       try {
-        setIsLoading(true);
         const [memberData, appList] = await Promise.all([
           membersApi.getMemberById(id),
           membersApi.getAllApplications(id),
         ]);
-
         if (isMounted) {
           setMember(memberData);
           setApplications(appList || []);
+          setError('');
         }
       } catch (err: unknown) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load member profile');
+          setError(err instanceof Error ? err.message : 'Unable to load member profile.');
         }
       } finally {
         if (isMounted) setIsLoading(false);
       }
     };
 
-    fetchData();
+    void loadMember();
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-slate-500">
-        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-        <p className="animate-pulse font-medium">Loading member record...</p>
-      </div>
-    );
-  }
-
-  if (error || !member) {
-    return (
-      <div className="min-h-screen p-8 max-w-5xl mx-auto flex flex-col items-start">
-        <Link
-          to="/"
-          className="flex items-center text-slate-500 hover:text-primary transition mb-8"
-        >
-          <ArrowLeft className="w-5 h-5 mr-2" /> Back to Binder
-        </Link>
-        <div className="w-full min-h-[40vh] p-8 bg-red-500/5 border-2 border-dashed border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-          <h3 className="text-xl font-bold text-red-600 dark:text-red-400">
-            Unable to load member
-          </h3>
-          <p className="text-red-500/80 mt-2">{error || 'Member not found.'}</p>
-        </div>
-      </div>
-    );
-  }
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError('');
+    setReloadKey(k => k + 1);
+  };
 
   return (
-    <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <PageShell width="reference">
+      <div className="space-y-8">
         <div>
           <Link
             to="/"
-            className="inline-flex items-center text-sm font-semibold text-slate-500 hover:text-primary transition-colors bg-white dark:bg-white/5 py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-accent transition-colors duration-150"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Binder
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+            <span>Return to Directory</span>
           </Link>
         </div>
 
-        {/* Profile Card */}
-        <div className="bg-white/70 dark:bg-black/40 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-primary to-accent" />
-          <div className="pl-4 space-y-5">
-            <div>
-              <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+        {isLoading ? (
+          <div aria-label="Loading member profile" className="space-y-6">
+            <div className="space-y-2">
+              <div className="h-10 w-64 bg-border rounded-sm" />
+              <div className="h-4 w-48 bg-border rounded-sm" />
+            </div>
+            <div className="bg-surface border border-border rounded-lg p-8 space-y-4">
+              <div className="h-5 w-36 bg-border rounded-sm" />
+              <div className="h-4 w-full bg-border rounded-sm" />
+              <div className="h-4 w-3/4 bg-border rounded-sm" />
+            </div>
+          </div>
+        ) : error || !member ? (
+          <div
+            role="alert"
+            className="bg-surface border border-foreground rounded-lg p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-foreground shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="space-y-1">
+                <h1 className="font-heading text-2xl font-normal text-foreground">
+                  Unable to load member record
+                </h1>
+                <p className="text-sm text-muted-foreground">{error || 'Member not found.'}</p>
+              </div>
+            </div>
+            <Button variant="secondary" onClick={handleRetry} className="shrink-0">
+              Retry Loading Member
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Editorial Member Header */}
+            <header className="space-y-2">
+              <h1 className="font-heading text-4xl font-normal tracking-tight text-foreground leading-tight">
                 {member.first_name} {member.last_name}
               </h1>
-              <p className="text-xs font-mono text-slate-400 mt-1">Member ID: {member.id}</p>
-            </div>
+              <p className="font-accent text-xs text-muted-foreground tabular-nums">
+                Member ID {member.id} &middot; Joined {formatDate(member.joined_at)}
+              </p>
+            </header>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
-                <Mail className="w-4 h-4 mr-3 text-primary flex-shrink-0" />
-                <span>{member.email || 'No email provided'}</span>
-              </div>
-              <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
-                <Phone className="w-4 h-4 mr-3 text-primary flex-shrink-0" />
-                <span>{member.phone || 'No phone provided'}</span>
-              </div>
-              <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
-                <MapPin className="w-4 h-4 mr-3 text-primary flex-shrink-0" />
-                <span>{member.address || 'No address provided'}</span>
-              </div>
-              <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
-                <Clock className="w-4 h-4 mr-3 text-primary flex-shrink-0" />
-                <span>Joined {new Date(member.joined_at).toLocaleDateString()}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+            {/* Contact Details Panel */}
+            <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
+              <h2 className="font-heading text-2xl font-normal text-foreground mb-5">
+                Contact Information
+              </h2>
+              <dl className="divide-y divide-border">
+                <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                  <dt className="text-sm text-muted-foreground">Email Address</dt>
+                  <dd className="text-sm font-medium text-foreground">
+                    {member.email ? (
+                      <a
+                        href={`mailto:${member.email}`}
+                        className="text-accent hover:text-accent-hover hover:underline transition-colors duration-150"
+                      >
+                        {member.email}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground font-normal">Not provided</span>
+                    )}
+                  </dd>
+                </div>
 
-        {/* Linked Application Snapshots */}
-        <section className="bg-white/50 dark:bg-white/[0.02] border border-slate-200 dark:border-slate-800 rounded-3xl p-7">
-          <div className="flex items-center gap-2 mb-5">
-            <FileText className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              Application Snapshots ({applications.length})
-            </h2>
-          </div>
+                <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                  <dt className="text-sm text-muted-foreground">Phone Number</dt>
+                  <dd className="text-sm font-medium text-foreground tabular-nums">
+                    {member.phone ? (
+                      <a
+                        href={toTelHref(member.phone)}
+                        className="text-accent hover:text-accent-hover hover:underline transition-colors duration-150"
+                      >
+                        {member.phone}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground font-normal">Not provided</span>
+                    )}
+                  </dd>
+                </div>
 
-          {applications.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No intake applications linked to this member.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {applications.map(app => (
-                <Link
-                  key={app.id}
-                  to={`/applications/${app.id}`}
-                  className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 hover:border-primary/50 transition"
-                >
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                      Submitted {new Date(app.created_at).toLocaleString()}
-                    </div>
-                    <div className="text-xs font-mono text-slate-400 mt-0.5">{app.id}</div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+                <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                  <dt className="text-sm text-muted-foreground">Residential Address</dt>
+                  <dd className="text-sm font-medium text-foreground sm:text-right">
+                    {member.address || (
+                      <span className="text-muted-foreground font-normal">Not provided</span>
+                    )}
+                  </dd>
+                </div>
+
+                <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                  <dt className="text-sm text-muted-foreground">Joined Date</dt>
+                  <dd className="font-accent text-sm text-foreground tabular-nums">
+                    {formatDate(member.joined_at)}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            {/* Linked Application Snapshots */}
+            <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
+              <div className="flex items-baseline justify-between gap-4 mb-5">
+                <h2 className="font-heading text-2xl font-normal text-foreground">
+                  Application Snapshots
+                </h2>
+                <span className="font-accent text-xs text-muted-foreground tabular-nums">
+                  {applications.length} {applications.length === 1 ? 'record' : 'records'}
+                </span>
+              </div>
+
+              {applications.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No intake applications are linked to this member yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {applications.map(app => (
+                    <li key={app.id}>
+                      <Link
+                        to={`/applications/${app.id}`}
+                        className="py-4 flex items-center justify-between gap-4 group transition-colors duration-150"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-foreground group-hover:text-accent transition-colors duration-150">
+                            Submitted {formatDateTime(app.created_at)}
+                          </div>
+                          <div className="font-accent text-xs text-muted-foreground mt-1 truncate tabular-nums">
+                            {app.id}
+                          </div>
+                        </div>
+                        <ChevronRight
+                          className="w-4 h-4 text-muted-foreground group-hover:text-accent shrink-0 transition-colors duration-150"
+                          aria-hidden="true"
+                        />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
       </div>
-    </div>
+    </PageShell>
   );
 };
 

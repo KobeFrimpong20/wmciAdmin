@@ -2,14 +2,47 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { membersApi } from '../api/members';
 import type { Application } from '../types/member';
-import {
-  ArrowLeft,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  User,
-} from 'lucide-react';
+import { PageShell } from '../components/PageShell';
+import { Button } from '../components/Button';
+import { buttonStyles } from '../components/buttonStyles';
+import { AlertCircle, ArrowLeft, Check, Minus, User } from 'lucide-react';
+
+function formatDateTime(value: string): string {
+  if (!value) return 'Date unavailable';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function toTelHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
+
+function StatusRow({ label, checked }: { label: string; checked: boolean }) {
+  return (
+    <div className="py-3.5 flex items-center justify-between gap-4">
+      <span className="text-sm text-foreground">{label}</span>
+      <span
+        className={`inline-flex items-center gap-1.5 font-accent text-xs ${
+          checked ? 'text-accent font-medium' : 'text-muted-foreground'
+        }`}
+      >
+        {checked ? (
+          <Check className="w-4 h-4 shrink-0" aria-hidden="true" />
+        ) : (
+          <Minus className="w-4 h-4 shrink-0" aria-hidden="true" />
+        )}
+        <span>{checked ? 'Yes' : 'No'}</span>
+      </span>
+    </div>
+  );
+}
 
 const ApplicationDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -17,230 +50,263 @@ const ApplicationDetail = () => {
   const [application, setApplication] = useState<Application | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!id) return;
     let isMounted = true;
 
-    const fetchApplication = async () => {
-      if (!id) return;
+    const loadApplication = async () => {
       try {
-        setIsLoading(true);
         const data = await membersApi.getApplicationById(id);
-        if (isMounted) setApplication(data);
+        if (isMounted) {
+          setApplication(data);
+          setError('');
+        }
       } catch (err: unknown) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load application');
+          setError(err instanceof Error ? err.message : 'Unable to load application.');
         }
       } finally {
         if (isMounted) setIsLoading(false);
       }
     };
 
-    fetchApplication();
+    void loadApplication();
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-slate-500">
-        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-        <p className="animate-pulse font-medium">Loading application snapshot...</p>
-      </div>
-    );
-  }
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError('');
+    setReloadKey(k => k + 1);
+  };
 
-  if (error || !application) {
-    return (
-      <div className="min-h-screen p-8 max-w-5xl mx-auto flex flex-col items-start">
-        <Link
-          to="/"
-          className="flex items-center text-slate-500 hover:text-primary transition mb-8"
-        >
-          <ArrowLeft className="w-5 h-5 mr-2" /> Back to Binder
-        </Link>
-        <div className="w-full min-h-[40vh] p-8 bg-red-500/5 border-2 border-dashed border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-          <h3 className="text-xl font-bold text-red-600 dark:text-red-400">
-            Unable to load application
-          </h3>
-          <p className="text-red-500/80 mt-2">{error || 'Application not found.'}</p>
-        </div>
-      </div>
-    );
-  }
+  const commitmentItems = application
+    ? [
+        { label: 'Regular Attendance & Participation', checked: application.attendance_commitment },
+        { label: 'Faithful Tithing', checked: application.tithe_commitment },
+        { label: 'Personal Prayer Life', checked: application.prayer_commitment },
+        { label: 'Sober & Self-Controlled Lifestyle', checked: application.sober_commitment },
+        { label: 'Respect for Leadership & Members', checked: application.respect_commitment },
+        { label: 'Statement of Faith & Growth', checked: application.faith_commitment },
+      ]
+    : [];
 
-  const BooleanItem = ({ checked, label }: { checked: boolean; label: string }) => (
-    <div className="flex items-center space-x-3 p-3 rounded-xl border bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800">
-      {checked ? (
-        <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-      ) : (
-        <XCircle className="w-5 h-5 text-slate-300 dark:text-slate-600 flex-shrink-0" />
-      )}
-      <span
-        className={`text-sm font-medium ${
-          checked ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
-        }`}
-      >
-        {label}
-      </span>
-    </div>
-  );
+  const agreedCount = commitmentItems.filter(item => item.checked).length;
 
   return (
-    <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto space-y-8">
-        {/* Top bar */}
+    <PageShell width="reference">
+      <div className="space-y-8">
+        {/* Top Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Link
             to="/"
-            className="inline-flex items-center text-sm font-semibold text-slate-500 hover:text-primary transition-colors bg-white dark:bg-white/5 py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-accent transition-colors duration-150"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Binder
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+            <span>Return to Directory</span>
           </Link>
 
-          <Link
-            to={`/members/${application.member_id}`}
-            className="inline-flex items-center text-sm font-semibold text-primary hover:text-white transition-colors border border-primary/20 hover:bg-primary py-2 px-4 rounded-xl shadow-sm bg-white dark:bg-white/5"
-          >
-            <User className="w-4 h-4 mr-2" /> View Linked Member
-          </Link>
+          {application && (
+            <Link
+              to={`/members/${application.member_id}`}
+              className={buttonStyles('secondary')}
+            >
+              <User className="w-4 h-4" aria-hidden="true" />
+              <span>Open Member Profile</span>
+            </Link>
+          )}
         </div>
 
-        {/* Snapshot Header */}
-        <div className="bg-white/70 dark:bg-black/40 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-primary to-accent" />
-          <div className="pl-4">
-            <span className="inline-block text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-md mb-3">
-              Immutable Application Snapshot
-            </span>
-            <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-              {application.first_name} {application.last_name}
-            </h1>
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2">
-              {application.email || 'No email'} &bull; {application.phone || 'No phone'}
-            </p>
-            {application.address && (
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                {application.address}
-              </p>
-            )}
-            <p className="text-xs font-mono text-slate-400 mt-3">
-              Application ID: {application.id} &bull; Submitted{' '}
-              {new Date(application.created_at).toLocaleString()}
-            </p>
+        {isLoading ? (
+          <div aria-label="Loading application snapshot" className="space-y-6">
+            <div className="space-y-2">
+              <div className="h-10 w-72 bg-border rounded-sm" />
+              <div className="h-4 w-56 bg-border rounded-sm" />
+            </div>
+            <div className="bg-surface border border-border rounded-lg p-8 space-y-4">
+              <div className="h-5 w-40 bg-border rounded-sm" />
+              <div className="h-4 w-full bg-border rounded-sm" />
+              <div className="h-4 w-5/6 bg-border rounded-sm" />
+            </div>
           </div>
-        </div>
+        ) : error || !application ? (
+          <div
+            role="alert"
+            className="bg-surface border border-foreground rounded-lg p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-foreground shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="space-y-1">
+                <h1 className="font-heading text-2xl font-normal text-foreground">
+                  Unable to load application
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  {error || 'Application record not found.'}
+                </p>
+              </div>
+            </div>
+            <Button variant="secondary" onClick={handleRetry} className="shrink-0">
+              Retry Loading Application
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Editorial Document Header (no eyebrow label) */}
+            <header className="space-y-3 border-b border-border pb-6">
+              <h1 className="font-heading text-4xl font-normal tracking-tight text-foreground leading-tight">
+                {application.first_name} {application.last_name}
+              </h1>
+              <p className="text-base text-muted-foreground max-w-xl">
+                Immutable membership application snapshot submitted{' '}
+                <span className="tabular-nums">{formatDateTime(application.created_at)}</span>.
+              </p>
 
-        {/* Snapshot Details */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-12">
-          <div className="space-y-8">
-            <section className="bg-white/50 dark:bg-white/[0.02] border border-slate-200 dark:border-slate-800 rounded-3xl p-7">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm pt-1">
+                {application.email ? (
+                  <a
+                    href={`mailto:${application.email}`}
+                    className="text-accent hover:text-accent-hover hover:underline transition-colors duration-150"
+                  >
+                    {application.email}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">No email</span>
+                )}
+                <span className="text-border" aria-hidden="true">
+                  /
+                </span>
+                {application.phone ? (
+                  <a
+                    href={toTelHref(application.phone)}
+                    className="text-accent hover:text-accent-hover hover:underline transition-colors duration-150 tabular-nums"
+                  >
+                    {application.phone}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">No phone</span>
+                )}
+                {application.address && (
+                  <>
+                    <span className="text-border" aria-hidden="true">
+                      /
+                    </span>
+                    <span className="text-muted-foreground">{application.address}</span>
+                  </>
+                )}
+              </div>
+
+              <p className="font-accent text-xs text-muted-foreground tabular-nums">
+                Application ID {application.id}
+              </p>
+            </header>
+
+            {/* Demographics */}
+            <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
+              <h2 className="font-heading text-2xl font-normal text-foreground mb-4">
                 Demographics
               </h2>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800/60 pb-3">
-                  <span className="text-slate-500 font-medium text-sm">Date of Birth</span>
-                  <span className="text-slate-900 dark:text-slate-200 font-semibold text-sm">
-                    {application.date_of_birth || 'N/A'}
-                  </span>
+              <dl className="divide-y divide-border">
+                <div className="py-3.5 flex items-baseline justify-between gap-4">
+                  <dt className="text-sm text-muted-foreground">Date of Birth</dt>
+                  <dd className="font-accent text-sm text-foreground tabular-nums">
+                    {application.date_of_birth || 'Not provided'}
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800/60 pb-3">
-                  <span className="text-slate-500 font-medium text-sm">Marital Status</span>
-                  <span className="text-slate-900 dark:text-slate-200 font-semibold text-sm capitalize">
-                    {application.marital_status || 'N/A'}
-                  </span>
+                <div className="py-3.5 flex items-baseline justify-between gap-4">
+                  <dt className="text-sm text-muted-foreground">Marital Status</dt>
+                  <dd className="text-sm font-medium text-foreground capitalize">
+                    {application.marital_status || 'Not provided'}
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800/60 pb-3">
-                  <span className="text-slate-500 font-medium text-sm">Spouse Name</span>
-                  <span className="text-slate-900 dark:text-slate-200 font-semibold text-sm">
-                    {application.spouse_name || 'N/A'}
-                  </span>
+                <div className="py-3.5 flex items-baseline justify-between gap-4">
+                  <dt className="text-sm text-muted-foreground">Spouse Name</dt>
+                  <dd className="text-sm font-medium text-foreground">
+                    {application.spouse_name || 'None recorded'}
+                  </dd>
                 </div>
-                <div className="flex justify-between items-center pb-1">
-                  <span className="text-slate-500 font-medium text-sm">Children</span>
-                  <span className="text-slate-900 dark:text-slate-200 font-semibold text-sm">
+                <div className="py-3.5 flex items-baseline justify-between gap-4">
+                  <dt className="text-sm text-muted-foreground">Number of Children</dt>
+                  <dd className="font-accent text-sm text-foreground tabular-nums">
                     {application.num_children}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            {/* Spiritual Background */}
+            <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
+              <h2 className="font-heading text-2xl font-normal text-foreground mb-4">
+                Spiritual Background
+              </h2>
+              <div className="divide-y divide-border">
+                <StatusRow label="Born Again" checked={application.born_again} />
+                <StatusRow label="Water Baptized" checked={application.water_baptized} />
+                <StatusRow label="Speaks in Tongues" checked={application.speak_tongues} />
+                <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                  <span className="text-sm text-muted-foreground">Previous Church</span>
+                  <span className="text-sm font-medium text-foreground sm:text-right">
+                    {application.prev_church || 'None'}
                   </span>
                 </div>
               </div>
             </section>
 
-            <section className="bg-white/50 dark:bg-white/[0.02] border border-slate-200 dark:border-slate-800 rounded-3xl p-7">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-5">
-                Spiritual Context
-              </h2>
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <BooleanItem checked={application.born_again} label="Born Again" />
-                <BooleanItem checked={application.water_baptized} label="Water Baptized" />
-                <BooleanItem checked={application.speak_tongues} label="Speaks Tongues" />
-              </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-800">
-                <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Previous Church
-                </span>
-                <span className="text-slate-800 dark:text-slate-200 text-sm font-medium">
-                  {application.prev_church || 'None'}
+            {/* Commitment Agreements */}
+            <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <h2 className="font-heading text-2xl font-normal text-foreground">
+                  Commitment Agreements
+                </h2>
+                <span className="bg-accent-wash text-accent font-body text-xs font-medium px-2.5 py-1 rounded-sm tabular-nums">
+                  {agreedCount} of {commitmentItems.length} Agreed
                 </span>
               </div>
-            </section>
-          </div>
-
-          <div className="space-y-8">
-            <section className="bg-slate-900 dark:bg-black/60 rounded-3xl p-7 shadow-lg border border-slate-800 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
-              <h2 className="text-lg font-bold text-white mb-5 relative z-10">
-                Commitment Agreements
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
-                <BooleanItem checked={application.attendance_commitment} label="Attendance" />
-                <BooleanItem checked={application.tithe_commitment} label="Tithe" />
-                <BooleanItem checked={application.prayer_commitment} label="Active Prayer" />
-                <BooleanItem checked={application.sober_commitment} label="Sober Lifestyle" />
-                <BooleanItem checked={application.respect_commitment} label="Leadership Respect" />
-                <BooleanItem checked={application.faith_commitment} label="Statement of Faith" />
+              <div className="divide-y divide-border">
+                {commitmentItems.map(item => (
+                  <StatusRow key={item.label} label={item.label} checked={item.checked} />
+                ))}
               </div>
             </section>
 
-            <section className="bg-white/50 dark:bg-white/[0.02] border border-slate-200 dark:border-slate-800 rounded-3xl p-7">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-5">
+            {/* Signature Record */}
+            <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
+              <h2 className="font-heading text-2xl font-normal text-foreground mb-4">
                 Signature Record
               </h2>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-slate-800/80">
+              <dl className="divide-y divide-border">
+                <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
                   <div>
-                    <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                      Member Signed
-                    </div>
-                    <div className="text-xs font-medium text-slate-500 mt-0.5">
-                      Agreement to Discipleship Terms
-                    </div>
+                    <dt className="text-sm font-medium text-foreground">Member Signature</dt>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Agreement to discipleship terms
+                    </p>
                   </div>
-                  <span className="text-sm font-semibold text-primary">
+                  <dd className="font-accent text-sm text-accent tabular-nums">
                     {application.member_signature_date || 'Not dated'}
-                  </span>
+                  </dd>
                 </div>
-                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-slate-800/80">
+
+                <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
                   <div>
-                    <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                      Pastor Review
-                    </div>
-                    <div className="text-xs font-medium text-slate-500 mt-0.5">
-                      Planned for V2 approval workflow
-                    </div>
+                    <dt className="text-sm font-medium text-foreground">Pastor Review</dt>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Recorded upon pastoral approval
+                    </p>
                   </div>
-                  <span className="text-sm font-semibold text-slate-400">
+                  <dd className="font-accent text-sm text-muted-foreground tabular-nums">
                     {application.pastor_signature_date || 'Pending'}
-                  </span>
+                  </dd>
                 </div>
-              </div>
+              </dl>
             </section>
-          </div>
-        </div>
+          </>
+        )}
       </div>
-    </div>
+    </PageShell>
   );
 };
 

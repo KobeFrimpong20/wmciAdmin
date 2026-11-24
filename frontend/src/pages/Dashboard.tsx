@@ -1,33 +1,54 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { membersApi } from '../api/members';
 import type { Application, Member } from '../types/member';
 import MemberCard from '../components/MemberCard';
-import {
-  LayoutDashboard,
-  Users,
-  FileText,
-  Plus,
-  Loader2,
-  AlertCircle,
-  Mail,
-  Phone,
-  Clock,
-} from 'lucide-react';
+import { Button } from '../components/Button';
+import { buttonStyles } from '../components/buttonStyles';
+import { PageShell } from '../components/PageShell';
+import { AlertCircle, ArrowRight, Mail, Phone, Plus, Search } from 'lucide-react';
 
 type ActiveTab = 'applications' | 'members';
+
+function formatDate(value: string): string {
+  if (!value) return 'Date unavailable';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function toTelHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
+
+function countCommitments(app: Application): number {
+  return [
+    app.attendance_commitment,
+    app.tithe_commitment,
+    app.prayer_commitment,
+    app.sober_commitment,
+    app.respect_commitment,
+    app.faith_commitment,
+  ].filter(Boolean).length;
+}
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('applications');
   const [applications, setApplications] = useState<Application[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
-    const fetchAll = async () => {
+    const loadRecords = async () => {
       try {
         const [appData, memberData] = await Promise.all([
           membersApi.getAllApplications(),
@@ -36,204 +57,334 @@ const Dashboard = () => {
         if (isMounted) {
           setApplications(appData || []);
           setMembers(memberData || []);
+          setError('');
         }
       } catch (err: unknown) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load binder records');
+          setError(err instanceof Error ? err.message : 'Unable to reach the membership server.');
         }
       } finally {
         if (isMounted) setIsLoading(false);
       }
     };
 
-    fetchAll();
+    void loadRecords();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
-  const countCommitments = (app: Application) =>
-    [
-      app.attendance_commitment,
-      app.tithe_commitment,
-      app.prayer_commitment,
-      app.sober_commitment,
-      app.respect_commitment,
-      app.faith_commitment,
-    ].filter(Boolean).length;
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError('');
+    setReloadKey(k => k + 1);
+  };
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const filteredApplications = useMemo(() => {
+    if (!normalizedQuery) return applications;
+    return applications.filter(app =>
+      `${app.first_name} ${app.last_name} ${app.email} ${app.phone}`
+        .toLowerCase()
+        .includes(normalizedQuery)
+    );
+  }, [applications, normalizedQuery]);
+
+  const filteredMembers = useMemo(() => {
+    if (!normalizedQuery) return members;
+    return members.filter(member =>
+      `${member.first_name} ${member.last_name} ${member.email} ${member.phone} ${member.address}`
+        .toLowerCase()
+        .includes(normalizedQuery)
+    );
+  }, [members, normalizedQuery]);
 
   return (
-    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 text-foreground transition-colors duration-300">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header Block */}
-        <div className="bg-white/70 dark:bg-black/40 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="h-14 w-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg transform -rotate-6">
-                <LayoutDashboard className="text-white w-7 h-7" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-                  Digital Binder
-                </h1>
-                <p className="text-slate-500 dark:text-slate-400 mt-1">
-                  Membership applications &amp; congregation directory
-                </p>
-              </div>
-            </div>
-            <Link
-              to="/intake"
-              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:opacity-90 text-sm font-semibold transition shadow-sm"
-            >
-              <Plus className="h-4 w-4" />
-              <span>New Application</span>
-            </Link>
+    <PageShell width="wide">
+      <div className="space-y-8">
+        {/* Page Header */}
+        <section className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="font-heading text-4xl sm:text-5xl font-normal tracking-tight text-foreground leading-tight">
+              Congregation Binder
+            </h1>
+            <p className="text-base sm:text-lg text-muted-foreground max-w-xl">
+              Review incoming membership applications and browse the active congregation directory.
+            </p>
           </div>
-        </div>
+          <Link to="/intake" className={buttonStyles('primary', 'shrink-0')}>
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            <span>New Application</span>
+          </Link>
+        </section>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setActiveTab('applications')}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
-              activeTab === 'applications'
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-primary/40'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>Applications</span>
-            {!isLoading && !error && (
-              <span
-                className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-                  activeTab === 'applications'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                {applications.length}
-              </span>
-            )}
-          </button>
+        {/* Tab Bar & Search */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+          <div role="tablist" aria-label="Binder sections" className="flex items-center gap-6">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'applications'}
+              onClick={() => setActiveTab('applications')}
+              className={`inline-flex items-center gap-2 pb-1 text-sm font-medium border-b-2 transition-colors duration-150 cursor-pointer ${
+                activeTab === 'applications'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span>Applications</span>
+              {!isLoading && !error && (
+                <span
+                  className={`font-accent text-xs px-2 py-0.5 rounded-sm tabular-nums ${
+                    activeTab === 'applications'
+                      ? 'bg-accent-wash text-accent'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {applications.length}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('members')}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
-              activeTab === 'members'
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-primary/40'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Members</span>
-            {!isLoading && !error && (
-              <span
-                className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-                  activeTab === 'members'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                {members.length}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'members'}
+              onClick={() => setActiveTab('members')}
+              className={`inline-flex items-center gap-2 pb-1 text-sm font-medium border-b-2 transition-colors duration-150 cursor-pointer ${
+                activeTab === 'members'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span>Members</span>
+              {!isLoading && !error && (
+                <span
+                  className={`font-accent text-xs px-2 py-0.5 rounded-sm tabular-nums ${
+                    activeTab === 'members'
+                      ? 'bg-accent-wash text-accent'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {members.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <div className="relative w-full sm:w-72">
+            <Search
+              className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              aria-hidden="true"
+            />
+            <label htmlFor="binder-search" className="sr-only">
+              Filter records by name, email, or phone
+            </label>
+            <input
+              id="binder-search"
+              type="search"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={`Filter ${activeTab}...`}
+              className="w-full pl-9 pr-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent transition-colors duration-150"
+            />
+          </div>
         </div>
 
         {/* Content */}
         {isLoading ? (
-          <div className="min-h-[40vh] flex flex-col items-center justify-center space-y-4 text-slate-500">
-            <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            <p className="animate-pulse">Loading binder records...</p>
+          <div
+            aria-label="Loading binder records"
+            className="grid grid-cols-1 md:grid-cols-2 gap-6"
+          >
+            {[0, 1, 2, 3].map(slot => (
+              <div
+                key={slot}
+                className="bg-surface border border-border rounded-lg p-6 space-y-4"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="h-6 w-44 bg-border rounded-sm" />
+                  <div className="h-5 w-24 bg-accent-wash rounded-sm" />
+                </div>
+                <div className="space-y-2.5">
+                  <div className="h-4 w-56 bg-border rounded-sm" />
+                  <div className="h-4 w-40 bg-border rounded-sm" />
+                </div>
+                <div className="pt-4 border-t border-border flex justify-between">
+                  <div className="h-4 w-28 bg-border rounded-sm" />
+                  <div className="h-4 w-24 bg-border rounded-sm" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
-          <div className="min-h-[20vh] p-6 bg-red-500/5 dark:bg-red-500/10 border-2 border-dashed border-red-500/30 rounded-2xl flex flex-col items-center justify-center text-center">
-            <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
-            <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
-              Unable to load data
-            </h3>
-            <p className="text-red-500/80 mt-1">{error}</p>
+          <div
+            role="alert"
+            className="bg-surface border border-foreground rounded-lg p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-foreground shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="space-y-1">
+                <h2 className="font-heading text-xl font-normal text-foreground">
+                  Unable to load binder records
+                </h2>
+                <p className="text-sm text-muted-foreground">{error}</p>
+              </div>
+            </div>
+            <Button variant="secondary" onClick={handleRetry} className="shrink-0">
+              Retry Loading Records
+            </Button>
           </div>
         ) : activeTab === 'applications' ? (
           applications.length === 0 ? (
-            <div className="min-h-[40vh] border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-3xl flex flex-col items-center justify-center gap-3 p-8 text-center">
-              <p className="text-slate-500 dark:text-slate-400 text-lg">
-                No applications submitted yet.
+            <div className="bg-surface border border-border rounded-lg p-10 text-center space-y-4">
+              <h2 className="font-heading text-2xl font-normal text-foreground">
+                No membership applications yet
+              </h2>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                Submitted applications will appear here with their contact snapshot and commitment
+                summary.
               </p>
-              <Link
-                to="/intake"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition"
-              >
-                <Plus className="w-4 h-4" /> Submit First Application
-              </Link>
+              <div className="pt-2">
+                <Link to="/intake" className={buttonStyles('primary')}>
+                  <Plus className="w-4 h-4" aria-hidden="true" />
+                  <span>Start First Application</span>
+                </Link>
+              </div>
+            </div>
+          ) : filteredApplications.length === 0 ? (
+            <div className="bg-surface border border-border rounded-lg p-10 text-center space-y-3">
+              <h2 className="font-heading text-2xl font-normal text-foreground">
+                No matching applications
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                No applications matched &ldquo;{query}&rdquo;.
+              </p>
+              <div className="pt-1">
+                <Button variant="secondary" onClick={() => setQuery('')}>
+                  Clear Filter
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {applications.map(app => {
-                const initials = `${app.first_name?.[0] || ''}${app.last_name?.[0] || ''}`.toUpperCase();
-                return (
-                  <Link
-                    key={app.id}
-                    to={`/applications/${app.id}`}
-                    className="group block bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-slate-800 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/50 relative overflow-hidden"
-                  >
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-accent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredApplications.map(app => {
+                const fullName = `${app.first_name} ${app.last_name}`.trim() || 'Unnamed Applicant';
+                const commitments = countCommitments(app);
 
-                    <div className="flex items-center space-x-4 mb-4">
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center text-base font-bold text-slate-700 dark:text-slate-300 group-hover:from-primary group-hover:to-accent group-hover:text-white transition-all">
-                        {initials || '?'}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-lg text-slate-900 dark:text-white leading-tight truncate">
-                          {app.first_name} {app.last_name}
-                        </h3>
-                        <span className="mt-1 inline-block text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                          {countCommitments(app)}/6 Commitments
+                return (
+                  <article
+                    key={app.id}
+                    className="bg-surface border border-border rounded-lg p-6 transition-colors duration-150 hover:border-accent flex flex-col justify-between gap-5"
+                  >
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="font-heading text-2xl font-normal text-foreground leading-snug">
+                            <Link
+                              to={`/applications/${app.id}`}
+                              className="hover:text-accent transition-colors duration-150"
+                            >
+                              {fullName}
+                            </Link>
+                          </h3>
+                          <p className="font-accent text-xs text-muted-foreground mt-1 truncate tabular-nums">
+                            Submitted {formatDate(app.created_at)}
+                          </p>
+                        </div>
+
+                        <span className="shrink-0 bg-accent-wash text-accent font-body text-xs font-medium px-2.5 py-1 rounded-sm tabular-nums">
+                          {commitments}/6 Commitments
                         </span>
                       </div>
+
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">
+                          <Mail className="w-4 h-4 shrink-0" aria-hidden="true" />
+                          {app.email ? (
+                            <a
+                              href={`mailto:${app.email}`}
+                              className="truncate text-foreground hover:text-accent hover:underline transition-colors duration-150"
+                            >
+                              {app.email}
+                            </a>
+                          ) : (
+                            <span>No email provided</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">
+                          <Phone className="w-4 h-4 shrink-0" aria-hidden="true" />
+                          {app.phone ? (
+                            <a
+                              href={toTelHref(app.phone)}
+                              className="truncate text-foreground hover:text-accent hover:underline transition-colors duration-150 tabular-nums"
+                            >
+                              {app.phone}
+                            </a>
+                          ) : (
+                            <span>No phone provided</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-2.5 mt-4">
-                      <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
-                        <Mail className="h-4 w-4 mr-3 flex-shrink-0 text-slate-400" />
-                        <span className="truncate">{app.email || 'No email provided'}</span>
-                      </div>
-                      <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
-                        <Phone className="h-4 w-4 mr-3 flex-shrink-0 text-slate-400" />
-                        <span className="truncate">{app.phone || 'No phone provided'}</span>
-                      </div>
-                      <div className="flex items-center text-xs text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-4">
-                        <Clock className="h-3.5 w-3.5 mr-2" />
-                        Submitted{' '}
-                        {new Date(app.created_at).toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </div>
+                    <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
+                      <span className="font-accent text-xs text-muted-foreground tabular-nums">
+                        {app.pastor_signature_date ? 'Pastor signed' : 'Pending pastor review'}
+                      </span>
+                      <Link
+                        to={`/applications/${app.id}`}
+                        className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors duration-150"
+                      >
+                        <span>Review Application</span>
+                        <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                      </Link>
                     </div>
-                  </Link>
+                  </article>
                 );
               })}
             </div>
           )
         ) : members.length === 0 ? (
-          <div className="min-h-[40vh] border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-3xl flex items-center justify-center">
-            <p className="text-slate-500 dark:text-slate-400 text-lg">
-              No members found in the system yet.
+          <div className="bg-surface border border-border rounded-lg p-10 text-center space-y-4">
+            <h2 className="font-heading text-2xl font-normal text-foreground">
+              No members in the directory yet
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Members are added automatically when a new intake application is submitted.
             </p>
+            <div className="pt-2">
+              <Link to="/intake" className={buttonStyles('primary')}>
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                <span>Add Member via Intake</span>
+              </Link>
+            </div>
+          </div>
+        ) : filteredMembers.length === 0 ? (
+          <div className="bg-surface border border-border rounded-lg p-10 text-center space-y-3">
+            <h2 className="font-heading text-2xl font-normal text-foreground">
+              No matching members
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              No directory records matched &ldquo;{query}&rdquo;.
+            </p>
+            <div className="pt-1">
+              <Button variant="secondary" onClick={() => setQuery('')}>
+                Clear Filter
+              </Button>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {members.map(member => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {filteredMembers.map(member => (
               <MemberCard key={member.id} member={member} />
             ))}
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 };
 

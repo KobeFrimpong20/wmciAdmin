@@ -1,4 +1,4 @@
-import { Mail, Phone, Clock } from 'lucide-react';
+import { ArrowRight, Mail, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Member } from '../types/member';
 
@@ -6,48 +6,90 @@ interface MemberCardProps {
   member: Member;
 }
 
+function formatDate(value: string): string {
+  if (!value) return 'Date unavailable';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function toTelHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
+
 const MemberCard = ({ member }: MemberCardProps) => {
-  const initials = `${member.first_name?.[0] || ''}${member.last_name?.[0] || ''}`.toUpperCase();
+  const fullName = `${member.first_name} ${member.last_name}`.trim() || 'Unnamed Member';
 
   return (
-    <Link
-      to={`/members/${member.id}`}
-      className="group block bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-slate-800 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/50 relative overflow-hidden"
-    >
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-accent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-      <div className="flex items-center space-x-4 mb-4">
-        <div className="h-14 w-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border-2 border-white dark:border-slate-800 shadow-md flex items-center justify-center text-lg font-bold text-slate-700 dark:text-slate-300 group-hover:from-primary group-hover:to-accent group-hover:text-white transition-all">
-          {initials || '?'}
+    <article className="bg-surface border border-border rounded-lg p-6 transition-colors duration-150 hover:border-accent flex flex-col justify-between gap-5">
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-heading text-2xl font-normal text-foreground leading-snug">
+              <Link
+                to={`/members/${member.id}`}
+                className="hover:text-accent transition-colors duration-150"
+              >
+                {fullName}
+              </Link>
+            </h3>
+            <p className="font-accent text-xs text-muted-foreground mt-1 truncate tabular-nums">
+              {member.id}
+            </p>
+          </div>
+          <span className="shrink-0 font-accent text-xs text-muted-foreground tabular-nums pt-1">
+            Joined {formatDate(member.joined_at)}
+          </span>
         </div>
-        <div className="min-w-0">
-          <h3 className="font-semibold text-lg text-slate-900 dark:text-white leading-tight truncate">
-            {member.first_name} {member.last_name}
-          </h3>
-          <p className="text-xs font-mono text-slate-400 mt-1 truncate">{member.id}</p>
+
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">
+            <Mail className="w-4 h-4 shrink-0" aria-hidden="true" />
+            {member.email ? (
+              <a
+                href={`mailto:${member.email}`}
+                className="truncate text-foreground hover:text-accent hover:underline transition-colors duration-150"
+              >
+                {member.email}
+              </a>
+            ) : (
+              <span>No email on file</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">
+            <Phone className="w-4 h-4 shrink-0" aria-hidden="true" />
+            {member.phone ? (
+              <a
+                href={toTelHref(member.phone)}
+                className="truncate text-foreground hover:text-accent hover:underline transition-colors duration-150 tabular-nums"
+              >
+                {member.phone}
+              </a>
+            ) : (
+              <span>No phone on file</span>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="space-y-3 mt-5">
-        <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
-          <Mail className="h-4 w-4 mr-3 flex-shrink-0 text-slate-400" />
-          <span className="truncate">{member.email || 'No email provided'}</span>
-        </div>
-        <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
-          <Phone className="h-4 w-4 mr-3 flex-shrink-0 text-slate-400" />
-          <span className="truncate">{member.phone || 'No phone provided'}</span>
-        </div>
-        <div className="flex items-center text-xs text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-4">
-          <Clock className="h-3.5 w-3.5 mr-2" />
-          Joined{' '}
-          {new Date(member.joined_at).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          })}
-        </div>
+      <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground truncate">
+          {member.address || 'No address on file'}
+        </span>
+        <Link
+          to={`/members/${member.id}`}
+          className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors duration-150"
+        >
+          <span>Open Profile</span>
+          <ArrowRight className="w-4 h-4" aria-hidden="true" />
+        </Link>
       </div>
-    </Link>
+    </article>
   );
 };
 
