@@ -16,3 +16,6 @@ frontend/yarn-error.log
 *.exe
 *.exe~
 *.dil
+*.db
+*.db-wal
+*.db-shm

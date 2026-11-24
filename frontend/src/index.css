@@ -1,39 +1,102 @@
 @import "tailwindcss";
 
-@theme {
-  --color-primary: var(--primary);
-  --color-secondary: var(--secondary);
-  --color-accent: var(--accent);
-  --color-background: var(--background);
+@theme inline {
+  /* Palette — The Editorial Desk (Warm Paper / Dark Slate + Editorial Navy) */
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-pressed: var(--accent-pressed);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-wash: var(--accent-wash);
+
+  /* Typography — The Three Voices Rule */
+  --font-heading: "Lora", ui-serif, Georgia, serif;
+  --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-accent: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Shapes — Consistent three-step corner scale */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
 }
 
 @layer base {
   :root {
-    --primary: #449dd1;
-    --secondary: #e8958b;
-    --accent: #fc475b;
-    --background: #f3f9fc;
-    --foreground: #050f15;
-    --global-bg-gradient: linear-gradient(135deg, #ffffff 0%, var(--background) 100%);
+    color-scheme: light;
+    --paper: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --foreground: #1c1917;
+    --muted-foreground: #57534e;
+    --accent: #1f3a5f;
+    --accent-hover: #436e93;
+    --accent-pressed: #17304d;
+    --accent-foreground: #ffffff;
+    --accent-wash: #eef3f8;
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
-      --primary: #2e88bd;
-      --secondary: #732017;
-      --accent: #ba0318;
-      --background: #03090c;
-      --foreground: #eaf4fa;
-      --global-bg-gradient: linear-gradient(135deg, #000000 0%, var(--background) 60%, #0a1d28 100%);
+      color-scheme: dark;
+      --paper: #141210;
+      --surface: #1c1917;
+      --border: #2e2a27;
+      --foreground: #f5f5f4;
+      --muted-foreground: #a8a29e;
+      --accent: #7fa7cf;
+      --accent-hover: #9bbce0;
+      --accent-pressed: #6791bc;
+      --accent-foreground: #0f1a28;
+      --accent-wash: #1b2838;
     }
   }
 
-  body {
-    background: var(--global-bg-gradient);
+  html {
+    background-color: var(--paper);
     color: var(--foreground);
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--paper);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.5;
     min-height: 100vh;
     margin: 0;
+    caret-color: var(--accent);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  a {
+    text-underline-offset: 3px;
+  }
+
+  ::selection {
+    background-color: var(--accent-wash);
+    color: var(--accent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 }
