@@ -524,6 +524,10 @@ const IntakePage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (step < STEPS.length - 1) {
+      handleNext();
+      return;
+    }
     setError('');
     setIsSubmitting(true);
     try {
@@ -621,12 +625,17 @@ const IntakePage = () => {
                 )}
 
                 {step < STEPS.length - 1 ? (
-                  <Button variant="primary" onClick={handleNext}>
+                  <Button key="next-step" type="button" variant="primary" onClick={handleNext}>
                     <span>Continue to {STEPS[step + 1]}</span>
                     <ChevronRight className="w-4 h-4" aria-hidden="true" />
                   </Button>
                 ) : (
-                  <Button type="submit" variant="primary" disabled={isSubmitting}>
+                  <Button
+                    key="submit-application"
+                    type="submit"
+                    variant="primary"
+                    disabled={isSubmitting}
+                  >
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
