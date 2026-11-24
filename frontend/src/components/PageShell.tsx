@@ -15,7 +15,9 @@ export function PageShell({ children, width = 'wide' }: PageShellProps) {
   return (
     <div className="min-h-screen flex flex-col bg-paper text-foreground font-body">
       <header className="bg-surface border-b border-border">
-        <div className={`${containerWidth} mx-auto px-6 h-16 flex items-center justify-between gap-4`}>
+        <div
+          className={`${containerWidth} mx-auto px-6 h-16 flex items-center justify-between gap-4`}
+        >
           <Link
             to="/"
             className="font-heading text-xl text-foreground hover:text-accent transition-colors duration-150"

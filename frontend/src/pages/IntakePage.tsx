@@ -96,7 +96,7 @@ function StepIndicator({ current }: { current: number }) {
             <span
               className={`font-accent text-xs w-6 h-6 shrink-0 rounded-sm flex items-center justify-center tabular-nums border ${
                 isCompleted
-                  ? 'bg-accent text-surface border-accent'
+                  ? 'bg-accent text-accent-foreground border-accent'
                   : isCurrent
                     ? 'bg-accent-wash text-accent border-accent font-medium'
                     : 'bg-paper text-muted-foreground border-border'
@@ -374,7 +374,7 @@ function Step3({
                     onClick={() => onBool(key, val)}
                     className={`px-4 py-1.5 rounded-sm text-sm font-medium border transition-colors duration-150 cursor-pointer ${
                       selected
-                        ? 'bg-accent text-surface border-accent'
+                        ? 'bg-accent text-accent-foreground border-accent'
                         : 'bg-surface text-muted-foreground border-border hover:bg-accent-wash hover:text-accent hover:border-accent'
                     }`}
                   >
