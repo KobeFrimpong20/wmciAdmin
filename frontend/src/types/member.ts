@@ -1,9 +1,9 @@
 export interface Member {
   id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
+  full_name: string;
+  date_of_birth: string;
   phone: string;
+  email: string;
   address: string;
   joined_at: string;
 }
@@ -13,8 +13,7 @@ export interface Application {
   member_id: string;
 
   // Immutable contact snapshot at submission time
-  first_name: string;
-  last_name: string;
+  full_name: string;
   email: string;
   phone: string;
   address: string;
@@ -46,6 +45,7 @@ export interface Application {
 }
 
 export interface IntakeFormPayload {
+  id: string;
   first_name: string;
   last_name: string;
   email: string;

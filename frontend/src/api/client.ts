@@ -1,5 +1,15 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 export const apiClient = async <T>(
   endpoint: string,
   options: RequestInit = {}
@@ -17,7 +27,10 @@ export const apiClient = async <T>(
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.error || errorBody.message || 'API request failed');
+    throw new ApiError(
+      errorBody.error || errorBody.message || 'API request failed',
+      response.status
+    );
   }
 
   return response.json();

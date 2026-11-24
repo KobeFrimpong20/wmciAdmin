@@ -22,26 +22,21 @@ function toTelHref(phone: string): string {
 }
 
 const MemberCard = ({ member }: MemberCardProps) => {
-  const fullName = `${member.first_name} ${member.last_name}`.trim() || 'Unnamed Member';
+  const fullName = member.full_name?.trim() || 'Unnamed Member';
 
   return (
     <article className="bg-surface border border-border rounded-lg p-6 transition-colors duration-150 hover:border-accent flex flex-col justify-between gap-5">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="font-heading text-2xl font-normal text-foreground leading-snug">
-              <Link
-                to={`/members/${member.id}`}
-                className="hover:text-accent transition-colors duration-150"
-              >
-                {fullName}
-              </Link>
-            </h3>
-            <p className="font-accent text-xs text-muted-foreground mt-1 truncate tabular-nums">
-              {member.id}
-            </p>
-          </div>
-          <span className="shrink-0 font-accent text-xs text-muted-foreground tabular-nums pt-1">
+          <h3 className="font-heading text-2xl font-normal text-foreground leading-snug min-w-0">
+            <Link
+              to={`/members/${member.id}`}
+              className="hover:text-accent transition-colors duration-150"
+            >
+              {fullName}
+            </Link>
+          </h3>
+          <span className="shrink-0 font-accent text-xs text-muted-foreground tabular-nums pt-1.5">
             Joined {formatDate(member.joined_at)}
           </span>
         </div>

@@ -2,13 +2,13 @@ package binder
 
 // Member represents a church member record.
 type Member struct {
-	ID        string `json:"id"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	Address   string `json:"address"`
-	JoinedAt  string `json:"joined_at"`
+	ID          string `json:"id"`
+	FullName    string `json:"full_name"`
+	DateOfBirth string `json:"date_of_birth"`
+	Phone       string `json:"phone"`
+	Email       string `json:"email"`
+	Address     string `json:"address"`
+	JoinedAt    string `json:"joined_at"`
 }
 
 // Application represents an immutable intake snapshot linked to a member.
@@ -17,11 +17,10 @@ type Application struct {
 	MemberID string `json:"member_id"`
 
 	// Contact snapshot
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	Address   string `json:"address"`
+	FullName string `json:"full_name"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+	Address  string `json:"address"`
 
 	// Demographics
 	DateOfBirth   string `json:"date_of_birth"`
@@ -51,15 +50,18 @@ type Application struct {
 
 // IntakeForm is the JSON payload submitted to POST /applications.
 type IntakeForm struct {
-	// Personal info
+	// Required client-generated UUID for idempotent submission
+	ID string `json:"id" binding:"required"`
+
+	// Personal info (collected separately, stored as normalized "Last, First")
 	FirstName string `json:"first_name" binding:"required"`
 	LastName  string `json:"last_name" binding:"required"`
 	Email     string `json:"email"`
-	Phone     string `json:"phone"`
+	Phone     string `json:"phone" binding:"required"`
 	Address   string `json:"address"`
 
 	// Demographics
-	DateOfBirth   string `json:"date_of_birth"`
+	DateOfBirth   string `json:"date_of_birth" binding:"required"`
 	MaritalStatus string `json:"marital_status"`
 	SpouseName    string `json:"spouse_name"`
 	NumChildren   int    `json:"num_children"`

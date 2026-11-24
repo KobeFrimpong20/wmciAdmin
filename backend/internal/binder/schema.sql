@@ -1,11 +1,12 @@
 CREATE TABLE IF NOT EXISTS members (
     id TEXT PRIMARY KEY,
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
+    full_name TEXT NOT NULL COLLATE NOCASE CHECK(length(trim(full_name)) > 0),
+    date_of_birth TEXT NOT NULL CHECK(length(trim(date_of_birth)) > 0),
+    phone TEXT NOT NULL CHECK(length(trim(phone)) > 0),
     email TEXT NOT NULL DEFAULT '',
-    phone TEXT NOT NULL DEFAULT '',
     address TEXT NOT NULL DEFAULT '',
-    joined_at TEXT NOT NULL
+    joined_at TEXT NOT NULL,
+    UNIQUE(full_name, date_of_birth, phone)
 );
 
 CREATE TABLE IF NOT EXISTS applications (
@@ -13,14 +14,13 @@ CREATE TABLE IF NOT EXISTS applications (
     member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
 
     -- Immutable snapshot of applicant contact info at submission time
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
+    full_name TEXT NOT NULL CHECK(length(trim(full_name)) > 0),
     email TEXT NOT NULL DEFAULT '',
-    phone TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL CHECK(length(trim(phone)) > 0),
     address TEXT NOT NULL DEFAULT '',
 
     -- Demographics
-    date_of_birth TEXT NOT NULL DEFAULT '',
+    date_of_birth TEXT NOT NULL CHECK(length(trim(date_of_birth)) > 0),
     marital_status TEXT NOT NULL DEFAULT '',
     spouse_name TEXT NOT NULL DEFAULT '',
     num_children INTEGER NOT NULL DEFAULT 0,
@@ -45,6 +45,6 @@ CREATE TABLE IF NOT EXISTS applications (
     created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_members_name ON members(last_name, first_name);
+CREATE INDEX IF NOT EXISTS idx_members_full_name ON members(full_name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_applications_member_id ON applications(member_id);
 CREATE INDEX IF NOT EXISTS idx_applications_created_at ON applications(created_at DESC);
