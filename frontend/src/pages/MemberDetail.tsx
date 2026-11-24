@@ -127,7 +127,7 @@ const MemberDetail = () => {
             {/* Editorial Member Header */}
             <header className="space-y-2">
               <h1 className="font-heading text-4xl font-normal tracking-tight text-foreground leading-tight">
-                {member.first_name} {member.last_name}
+                {member.full_name}
               </h1>
               <p className="font-accent text-xs text-muted-foreground tabular-nums">
                 Member ID {member.id} &middot; Joined {formatDate(member.joined_at)}
@@ -137,9 +137,16 @@ const MemberDetail = () => {
             {/* Contact Details Panel */}
             <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
               <h2 className="font-heading text-2xl font-normal text-foreground mb-5">
-                Contact Information
+                Member Information
               </h2>
               <dl className="divide-y divide-border">
+                <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                  <dt className="text-sm text-muted-foreground">Date of Birth</dt>
+                  <dd className="font-accent text-sm text-foreground tabular-nums">
+                    {member.date_of_birth || 'Not provided'}
+                  </dd>
+                </div>
+
                 <div className="py-3.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
                   <dt className="text-sm text-muted-foreground">Email Address</dt>
                   <dd className="text-sm font-medium text-foreground">

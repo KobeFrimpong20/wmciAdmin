@@ -85,16 +85,14 @@ const Dashboard = () => {
   const filteredApplications = useMemo(() => {
     if (!normalizedQuery) return applications;
     return applications.filter(app =>
-      `${app.first_name} ${app.last_name} ${app.email} ${app.phone}`
-        .toLowerCase()
-        .includes(normalizedQuery)
+      `${app.full_name} ${app.email} ${app.phone}`.toLowerCase().includes(normalizedQuery)
     );
   }, [applications, normalizedQuery]);
 
   const filteredMembers = useMemo(() => {
     if (!normalizedQuery) return members;
     return members.filter(member =>
-      `${member.first_name} ${member.last_name} ${member.email} ${member.phone} ${member.address}`
+      `${member.full_name} ${member.email} ${member.phone} ${member.address}`
         .toLowerCase()
         .includes(normalizedQuery)
     );
@@ -270,7 +268,7 @@ const Dashboard = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredApplications.map(app => {
-                const fullName = `${app.first_name} ${app.last_name}`.trim() || 'Unnamed Applicant';
+                const fullName = app.full_name?.trim() || 'Unnamed Applicant';
                 const commitments = countCommitments(app);
 
                 return (

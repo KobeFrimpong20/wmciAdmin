@@ -158,7 +158,7 @@ const ApplicationDetail = () => {
             {/* Editorial Document Header (no eyebrow label) */}
             <header className="space-y-3 border-b border-border pb-6">
               <h1 className="font-heading text-4xl font-normal tracking-tight text-foreground leading-tight">
-                {application.first_name} {application.last_name}
+                {application.full_name}
               </h1>
               <p className="text-base text-muted-foreground max-w-xl">
                 Immutable membership application snapshot submitted{' '}

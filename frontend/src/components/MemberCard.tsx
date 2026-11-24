@@ -22,7 +22,7 @@ function toTelHref(phone: string): string {
 }
 
 const MemberCard = ({ member }: MemberCardProps) => {
-  const fullName = `${member.first_name} ${member.last_name}`.trim() || 'Unnamed Member';
+  const fullName = member.full_name?.trim() || 'Unnamed Member';
 
   return (
     <article className="bg-surface border border-border rounded-lg p-6 transition-colors duration-150 hover:border-accent flex flex-col justify-between gap-5">

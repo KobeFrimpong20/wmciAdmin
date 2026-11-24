@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -31,9 +32,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 func (h *Handler) GetMembers(c *gin.Context) {
 	rows, err := h.DB.QueryContext(c.Request.Context(), `
-		SELECT id, first_name, last_name, email, phone, address, joined_at
+		SELECT id, full_name, date_of_birth, phone, email, address, joined_at
 		FROM members
-		ORDER BY last_name, first_name
+		ORDER BY full_name COLLATE NOCASE
 	`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch members"})
@@ -44,7 +45,7 @@ func (h *Handler) GetMembers(c *gin.Context) {
 	members := []Member{}
 	for rows.Next() {
 		var m Member
-		if err := rows.Scan(&m.ID, &m.FirstName, &m.LastName, &m.Email, &m.Phone, &m.Address, &m.JoinedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan member"})
 			return
 		}
@@ -63,10 +64,10 @@ func (h *Handler) GetMemberByID(c *gin.Context) {
 
 	var m Member
 	err := h.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, first_name, last_name, email, phone, address, joined_at
+		SELECT id, full_name, date_of_birth, phone, email, address, joined_at
 		FROM members
 		WHERE id = ?
-	`, id).Scan(&m.ID, &m.FirstName, &m.LastName, &m.Email, &m.Phone, &m.Address, &m.JoinedAt)
+	`, id).Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
@@ -86,12 +87,39 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 		return
 	}
 
-	form.FirstName = strings.TrimSpace(form.FirstName)
-	form.LastName = strings.TrimSpace(form.LastName)
-	if form.FirstName == "" || form.LastName == "" {
+	form.ID = strings.TrimSpace(form.ID)
+	if form.ID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Application id is required"})
+		return
+	}
+	if err := uuid.Validate(form.ID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid application id: must be a valid UUID"})
+		return
+	}
+	appID := form.ID
+
+	firstName := normalizeNamePart(form.FirstName)
+	lastName := normalizeNamePart(form.LastName)
+	if firstName == "" || lastName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "First name and last name are required"})
 		return
 	}
+	fullName := lastName + ", " + firstName
+
+	dob, err := normalizeDateOfBirth(form.DateOfBirth)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Date of birth must be a valid date in YYYY-MM-DD format"})
+		return
+	}
+
+	phone := normalizePhone(form.Phone)
+	if phone == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Phone number is required and must contain digits"})
+		return
+	}
+
+	email := strings.TrimSpace(form.Email)
+	address := strings.TrimSpace(form.Address)
 
 	ctx := c.Request.Context()
 	tx, err := h.DB.BeginTx(ctx, nil)
@@ -101,15 +129,46 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	var existingID string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM applications WHERE id = ?`, appID).Scan(&existingID)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Application with this id has already been submitted"})
+		return
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing application"})
+		return
+	}
+
+	err = tx.QueryRowContext(ctx, `
+		SELECT id FROM members
+		WHERE full_name = ? COLLATE NOCASE AND date_of_birth = ? AND phone = ?
+	`, fullName, dob, phone).Scan(&existingID)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "A member with this full name, date of birth, and phone number already exists"})
+		return
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing member"})
+		return
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	memberID := uuid.NewString()
-	appID := uuid.NewString()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO members (id, first_name, last_name, email, phone, address, joined_at)
+		INSERT INTO members (id, full_name, date_of_birth, phone, email, address, joined_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, memberID, form.FirstName, form.LastName, form.Email, form.Phone, form.Address, now)
+	`, memberID, fullName, dob, phone, email, address, now)
 	if err != nil {
+		_ = tx.Rollback()
+		if lookupErr := h.DB.QueryRowContext(ctx, `
+			SELECT id FROM members
+			WHERE full_name = ? COLLATE NOCASE AND date_of_birth = ? AND phone = ?
+		`, fullName, dob, phone).Scan(&existingID); lookupErr == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "A member with this full name, date of birth, and phone number already exists"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create member"})
 		return
 	}
@@ -117,23 +176,28 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO applications (
 			id, member_id,
-			first_name, last_name, email, phone, address,
+			full_name, email, phone, address,
 			date_of_birth, marital_status, spouse_name, num_children,
 			born_again, water_baptized, speak_tongues, prev_church,
 			attendance_commitment, tithe_commitment, prayer_commitment,
 			sober_commitment, respect_commitment, faith_commitment,
 			member_signature_date, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		appID, memberID,
-		form.FirstName, form.LastName, form.Email, form.Phone, form.Address,
-		form.DateOfBirth, form.MaritalStatus, form.SpouseName, form.NumChildren,
+		fullName, email, phone, address,
+		dob, form.MaritalStatus, form.SpouseName, form.NumChildren,
 		boolToInt(form.BornAgain), boolToInt(form.WaterBaptized), boolToInt(form.SpeakTongues), form.PrevChurch,
 		boolToInt(form.AttendanceCommitment), boolToInt(form.TitheCommitment), boolToInt(form.PrayerCommitment),
 		boolToInt(form.SoberCommitment), boolToInt(form.RespectCommitment), boolToInt(form.FaithCommitment),
 		form.MemberSignatureDate, now,
 	)
 	if err != nil {
+		_ = tx.Rollback()
+		if lookupErr := h.DB.QueryRowContext(ctx, `SELECT id FROM applications WHERE id = ?`, appID).Scan(&existingID); lookupErr == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Application with this id has already been submitted"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save application"})
 		return
 	}
@@ -146,12 +210,11 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 	created := Application{
 		ID:                   appID,
 		MemberID:             memberID,
-		FirstName:            form.FirstName,
-		LastName:             form.LastName,
-		Email:                form.Email,
-		Phone:                form.Phone,
-		Address:              form.Address,
-		DateOfBirth:          form.DateOfBirth,
+		FullName:             fullName,
+		Email:                email,
+		Phone:                phone,
+		Address:              address,
+		DateOfBirth:          dob,
 		MaritalStatus:        form.MaritalStatus,
 		SpouseName:           form.SpouseName,
 		NumChildren:          form.NumChildren,
@@ -174,7 +237,7 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 
 const selectApplicationColumns = `
 	id, member_id,
-	first_name, last_name, email, phone, address,
+	full_name, email, phone, address,
 	date_of_birth, marital_status, spouse_name, num_children,
 	born_again, water_baptized, speak_tongues, prev_church,
 	attendance_commitment, tithe_commitment, prayer_commitment,
@@ -255,15 +318,15 @@ type rowScanner interface {
 
 func scanApplication(s rowScanner) (Application, error) {
 	var (
-		a                                                                           Application
-		bornAgain, waterBaptized, speakTongues                                      int
-		attendance, tithe, prayer, sober, respect, faith                            int
-		memberSigDate, pastorSigDate                                                sql.NullString
+		a                                                Application
+		bornAgain, waterBaptized, speakTongues           int
+		attendance, tithe, prayer, sober, respect, faith int
+		memberSigDate, pastorSigDate                     sql.NullString
 	)
 
 	err := s.Scan(
 		&a.ID, &a.MemberID,
-		&a.FirstName, &a.LastName, &a.Email, &a.Phone, &a.Address,
+		&a.FullName, &a.Email, &a.Phone, &a.Address,
 		&a.DateOfBirth, &a.MaritalStatus, &a.SpouseName, &a.NumChildren,
 		&bornAgain, &waterBaptized, &speakTongues, &a.PrevChurch,
 		&attendance, &tithe, &prayer, &sober, &respect, &faith,
@@ -293,6 +356,60 @@ func scanApplication(s rowScanner) (Application, error) {
 	}
 
 	return a, nil
+}
+
+// normalizeNamePart trims surrounding whitespace, collapses internal whitespace,
+// lowercases all characters, and capitalizes the first letter of each part.
+func normalizeNamePart(s string) string {
+	words := strings.Fields(strings.ToLower(strings.TrimSpace(s)))
+	for i, w := range words {
+		words[i] = properCaseToken(w)
+	}
+	return strings.Join(words, " ")
+}
+
+func properCaseToken(token string) string {
+	var b strings.Builder
+	b.Grow(len(token))
+	capNext := true
+	for _, r := range token {
+		if r == '-' || r == '\'' {
+			b.WriteRune(r)
+			capNext = true
+			continue
+		}
+		if capNext {
+			b.WriteRune(unicode.ToUpper(r))
+			capNext = false
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// normalizePhone strips all non-digit characters.
+func normalizePhone(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// normalizeDateOfBirth validates strict YYYY-MM-DD calendar format.
+func normalizeDateOfBirth(s string) (string, error) {
+	trimmed := strings.TrimSpace(s)
+	if len(trimmed) != 10 {
+		return "", errors.New("invalid date length")
+	}
+	parsed, err := time.Parse("2006-01-02", trimmed)
+	if err != nil {
+		return "", err
+	}
+	return parsed.Format("2006-01-02"), nil
 }
 
 func boolToInt(b bool) int {

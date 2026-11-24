@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -11,6 +11,7 @@ import {
   Loader2,
   QrCode,
 } from 'lucide-react';
+import { ApiError } from '../api/client';
 import { membersApi } from '../api/members';
 import type { IntakeFormPayload } from '../types/member';
 import { PageShell } from '../components/PageShell';
@@ -20,13 +21,66 @@ import { buttonStyles } from '../components/buttonStyles';
 const STEPS = ['Personal Info', 'Demographics', 'Spiritual Background', 'Commitments'];
 
 const INTAKE_URL = `${window.location.origin}/intake`;
+const INTAKE_ID_STORAGE_KEY = 'binder-intake-id';
+
+type IntakeFormFields = Omit<IntakeFormPayload, 'id'>;
+type SubmissionState = 'idle' | 'created' | 'duplicate';
+
+let fallbackIntakeId: string | null = null;
 
 const inputCls =
   'w-full px-3.5 py-2.5 bg-surface border border-border rounded-sm font-body text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent transition-colors duration-150';
 
 const labelCls = 'block font-body text-sm font-medium text-foreground mb-1.5';
 
-function createInitialForm(): IntakeFormPayload {
+function generateClientUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function getOrCreateIntakeId(): string {
+  try {
+    const existing = sessionStorage.getItem(INTAKE_ID_STORAGE_KEY);
+    if (existing) return existing;
+    const next = generateClientUUID();
+    sessionStorage.setItem(INTAKE_ID_STORAGE_KEY, next);
+    return next;
+  } catch {
+    if (!fallbackIntakeId) {
+      fallbackIntakeId = generateClientUUID();
+    }
+    return fallbackIntakeId;
+  }
+}
+
+function clearIntakeId(): void {
+  fallbackIntakeId = null;
+  try {
+    sessionStorage.removeItem(INTAKE_ID_STORAGE_KEY);
+  } catch {
+    // Ignore storage restrictions
+  }
+}
+
+function rotateIntakeId(): string {
+  const next = generateClientUUID();
+  fallbackIntakeId = next;
+  try {
+    sessionStorage.setItem(INTAKE_ID_STORAGE_KEY, next);
+  } catch {
+    // Ignore storage restrictions
+  }
+  return next;
+}
+
+function createInitialForm(): IntakeFormFields {
   return {
     first_name: '',
     last_name: '',
@@ -51,7 +105,7 @@ function createInitialForm(): IntakeFormPayload {
   };
 }
 
-const COMMITMENTS: { key: keyof IntakeFormPayload; label: string }[] = [
+const COMMITMENTS: { key: keyof IntakeFormFields; label: string }[] = [
   {
     key: 'attendance_commitment',
     label: 'I commit to regular attendance and active participation in the church.',
@@ -177,8 +231,8 @@ function Step1({
   form,
   onChange,
 }: {
-  form: IntakeFormPayload;
-  onChange: (k: keyof IntakeFormPayload, v: string) => void;
+  form: IntakeFormFields;
+  onChange: (k: keyof IntakeFormFields, v: string) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -232,7 +286,7 @@ function Step1({
 
       <div>
         <label htmlFor="intake-phone" className={labelCls}>
-          Phone Number
+          Phone Number <span className="text-accent">*</span>
         </label>
         <input
           id="intake-phone"
@@ -242,6 +296,7 @@ function Step1({
           value={form.phone}
           onChange={e => onChange('phone', e.target.value)}
           placeholder="+1 (555) 000-0000"
+          required
         />
       </div>
 
@@ -267,8 +322,8 @@ function Step2({
   form,
   onChange,
 }: {
-  form: IntakeFormPayload;
-  onChange: (k: keyof IntakeFormPayload, v: string | number) => void;
+  form: IntakeFormFields;
+  onChange: (k: keyof IntakeFormFields, v: string | number) => void;
 }) {
   const showSpouse = form.marital_status === 'married' || form.marital_status === 'widowed';
 
@@ -344,11 +399,11 @@ function Step3({
   onBool,
   onChange,
 }: {
-  form: IntakeFormPayload;
-  onBool: (k: keyof IntakeFormPayload, v: boolean) => void;
-  onChange: (k: keyof IntakeFormPayload, v: string) => void;
+  form: IntakeFormFields;
+  onBool: (k: keyof IntakeFormFields, v: boolean) => void;
+  onChange: (k: keyof IntakeFormFields, v: string) => void;
 }) {
-  const boolQuestions: { key: keyof IntakeFormPayload; label: string }[] = [
+  const boolQuestions: { key: keyof IntakeFormFields; label: string }[] = [
     { key: 'born_again', label: 'Are you born again?' },
     { key: 'water_baptized', label: 'Have you been water baptized?' },
     { key: 'speak_tongues', label: 'Do you speak in tongues?' },
@@ -409,9 +464,9 @@ function Step4({
   onBool,
   onChange,
 }: {
-  form: IntakeFormPayload;
-  onBool: (k: keyof IntakeFormPayload, v: boolean) => void;
-  onChange: (k: keyof IntakeFormPayload, v: string) => void;
+  form: IntakeFormFields;
+  onBool: (k: keyof IntakeFormFields, v: boolean) => void;
+  onChange: (k: keyof IntakeFormFields, v: string) => void;
 }) {
   return (
     <div className="space-y-6">
@@ -485,14 +540,60 @@ function SuccessScreen({ name, onReset }: { name: string; onReset: () => void })
   );
 }
 
+function AlreadyReceivedScreen({ name, onReset }: { name: string; onReset: () => void }) {
+  return (
+    <div className="space-y-6 py-4">
+      <div className="flex items-start gap-3.5">
+        <CheckCircle2 className="w-6 h-6 text-accent shrink-0 mt-1" aria-hidden="true" />
+        <div className="space-y-2">
+          <h2 className="font-heading text-3xl font-normal text-foreground">
+            This Application Was Already Received
+          </h2>
+          <p className="text-base text-muted-foreground max-w-xl">
+            {name ? (
+              <>
+                An application for <span className="text-foreground font-medium">{name}</span> is
+                already recorded in the Digital Binder. No duplicate entry was created.
+              </>
+            ) : (
+              <>
+                This membership application is already recorded in the Digital Binder. No duplicate
+                entry was created.
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-sm text-muted-foreground pt-5 border-t border-border">
+        If you need to register another person, start a new application below.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3 pt-2">
+        <Button variant="primary" onClick={onReset}>
+          Start New Application
+        </Button>
+        <Link to="/" className={buttonStyles('secondary')}>
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+          <span>Return to Directory</span>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 const IntakePage = () => {
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<IntakeFormPayload>(() => createInitialForm());
+  const [form, setForm] = useState<IntakeFormFields>(() => createInitialForm());
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submissionState, setSubmissionState] = useState<SubmissionState>('idle');
 
-  const handleChange = (key: keyof IntakeFormPayload, value: string | number | boolean) => {
+  useEffect(() => {
+    getOrCreateIntakeId();
+  }, []);
+
+  const handleChange = (key: keyof IntakeFormFields, value: string | number | boolean) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -500,6 +601,7 @@ const IntakePage = () => {
     if (step === 0) {
       if (!form.first_name.trim()) return 'Please enter a first name before continuing.';
       if (!form.last_name.trim()) return 'Please enter a last name before continuing.';
+      if (!form.phone.replace(/\D/g, '')) return 'Please enter a valid phone number before continuing.';
     }
     if (step === 1) {
       if (!form.date_of_birth) return 'Please select a date of birth before continuing.';
@@ -531,25 +633,35 @@ const IntakePage = () => {
     setError('');
     setIsSubmitting(true);
     try {
-      await membersApi.submitIntake(form);
-      setSubmitted(true);
+      const id = getOrCreateIntakeId();
+      await membersApi.submitIntake({ ...form, id });
+      clearIntakeId();
+      setSubmissionState('created');
     } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'We could not submit the application. Please check your connection and try again.'
-      );
+      if (err instanceof ApiError && err.status === 409) {
+        clearIntakeId();
+        setSubmissionState('duplicate');
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'We could not submit the application. Please check your connection and try again.'
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleReset = () => {
+    rotateIntakeId();
     setForm(createInitialForm());
     setStep(0);
     setError('');
-    setSubmitted(false);
+    setSubmissionState('idle');
   };
+
+  const applicantName = `${form.first_name} ${form.last_name}`.trim();
 
   return (
     <PageShell width="reference">
@@ -568,7 +680,7 @@ const IntakePage = () => {
         <ShareLinkPanel url={INTAKE_URL} />
 
         {/* Validation / Submission Error Banner (separate top-level surface) */}
-        {error && !submitted && (
+        {error && submissionState === 'idle' && (
           <div
             role="alert"
             className="bg-surface border border-foreground rounded-lg p-4 flex items-start gap-3"
@@ -580,11 +692,10 @@ const IntakePage = () => {
 
         {/* Form Surface */}
         <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
-          {submitted ? (
-            <SuccessScreen
-              name={`${form.first_name} ${form.last_name}`.trim()}
-              onReset={handleReset}
-            />
+          {submissionState === 'created' ? (
+            <SuccessScreen name={applicantName} onReset={handleReset} />
+          ) : submissionState === 'duplicate' ? (
+            <AlreadyReceivedScreen name={applicantName} onReset={handleReset} />
           ) : (
             <form onSubmit={handleSubmit} noValidate>
               <StepIndicator current={step} />
