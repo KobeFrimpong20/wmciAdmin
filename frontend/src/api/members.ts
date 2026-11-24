@@ -2,37 +2,30 @@ import { apiClient } from './client';
 import type { Member, Application, IntakeFormPayload } from '../types/member';
 
 export const membersApi = {
-  getAllMembers: () => 
+  getAllMembers: () =>
     apiClient<Member[]>('/members', {
       method: 'GET',
     }),
-    
-  getMemberById: (id: string | number) => 
+
+  getMemberById: (id: string) =>
     apiClient<Member>(`/members/${id}`, {
       method: 'GET',
-    }),
-    
-  getMemberApplication: (id: string | number) => 
-    apiClient<Application>(`/members/${id}/application`, {
-      method: 'GET',
-    }),
-    
-  updateMember: (id: string | number, data: Partial<Member>) =>
-    apiClient<Member>(`/members/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
     }),
 
-  updateMemberApplication: (id: string | number, data: Partial<Application>) =>
-    apiClient<{ message: string }>(`/members/${id}/application`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+  getAllApplications: (memberId?: string) => {
+    const query = memberId ? `?member_id=${encodeURIComponent(memberId)}` : '';
+    return apiClient<Application[]>(`/applications${query}`, {
+      method: 'GET',
+    });
+  },
+
+  getApplicationById: (id: string) =>
+    apiClient<Application>(`/applications/${id}`, {
+      method: 'GET',
     }),
 
   submitIntake: (data: IntakeFormPayload) =>
-    apiClient<{ message: string }>('/applications', {
+    apiClient<Application>('/applications', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

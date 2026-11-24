@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Loader2, QrCode, Copy, Check } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Loader2, QrCode, Copy, Check, ArrowLeft } from 'lucide-react';
 import { membersApi } from '../api/members';
 import type { IntakeFormPayload } from '../types/member';
 
@@ -246,9 +247,15 @@ function SuccessScreen({ name }: { name: string }) {
       <p className="text-slate-500 dark:text-slate-400 mb-6">
         Thank you, <span className="font-semibold text-slate-700 dark:text-slate-300">{name}</span>. Your membership application has been received and is pending review by our team.
       </p>
-      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl text-sm text-amber-700 dark:text-amber-400">
-        You will be contacted once your application has been approved.
+      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl text-sm text-amber-700 dark:text-amber-400 mb-6">
+        You will be contacted once your application has been reviewed.
       </div>
+      <Link
+        to="/"
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition"
+      >
+        <ArrowLeft className="w-4 h-4" /> View in Digital Binder
+      </Link>
     </div>
   );
 }
@@ -294,8 +301,8 @@ const IntakePage = () => {
     try {
       await membersApi.submitIntake(form);
       setSubmitted(true);
-    } catch (err: any) {
-      setError(err.message || 'Submission failed. Please try again.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

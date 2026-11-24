@@ -1,17 +1,14 @@
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export const apiClient = async <T>(
-  endpoint: string, 
+  endpoint: string,
   options: RequestInit = {}
 ): Promise<T> => {
-  const token = localStorage.getItem('token');
   const headers = new Headers(options.headers || {});
-  
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
-  
-  headers.set('Content-Type', 'application/json');
 
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
@@ -20,7 +17,7 @@ export const apiClient = async <T>(
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.error || errorBody.message || 'API Request Failed');
+    throw new Error(errorBody.error || errorBody.message || 'API request failed');
   }
 
   return response.json();
