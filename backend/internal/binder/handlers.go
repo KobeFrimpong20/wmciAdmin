@@ -14,20 +14,30 @@ import (
 
 // Handler combines SQLite data access with HTTP handlers for the V1 CRUD API.
 type Handler struct {
-	DB *sql.DB
+	DB   *sql.DB
+	Auth AuthConfig
 }
 
-func NewHandler(db *sql.DB) *Handler {
-	return &Handler{DB: db}
+func NewHandler(db *sql.DB, auth AuthConfig) *Handler {
+	return &Handler{DB: db, Auth: auth}
 }
 
-// RegisterRoutes attaches the V1 member and application routes to a Gin router.
+// RegisterRoutes attaches the public intake/auth routes and admin-protected routes to a Gin router.
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
-	r.GET("/members", h.GetMembers)
-	r.GET("/members/:id", h.GetMemberByID)
+	// Public routes: admin sign-in and public idempotent membership intake
+	r.POST("/login", h.Login)
 	r.POST("/applications", h.CreateApplication)
-	r.GET("/applications", h.GetApplications)
-	r.GET("/applications/:id", h.GetApplicationByID)
+
+	// Admin-only routes protected by JWT role-based access control
+	admin := r.Group("")
+	admin.Use(h.RequireRole(RoleAdmin))
+	{
+		admin.GET("/auth/me", h.GetCurrentSession)
+		admin.GET("/members", h.GetMembers)
+		admin.GET("/members/:id", h.GetMemberByID)
+		admin.GET("/applications", h.GetApplications)
+		admin.GET("/applications/:id", h.GetApplicationByID)
+	}
 }
 
 func (h *Handler) GetMembers(c *gin.Context) {

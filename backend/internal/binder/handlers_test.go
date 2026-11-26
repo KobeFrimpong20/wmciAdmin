@@ -6,12 +6,26 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const (
+	testAdminPassword = "test-admin-password"
+	testJWTSecret     = "test-jwt-secret-key"
+)
+
+func testAuthConfig() AuthConfig {
+	return AuthConfig{
+		AdminPassword: testAdminPassword,
+		JWTSecret:     []byte(testJWTSecret),
+		TokenTTL:      time.Hour,
+	}
+}
 
 func setupTestRouter(t *testing.T) *gin.Engine {
 	t.Helper()
@@ -22,25 +36,49 @@ func setupTestRouter(t *testing.T) *gin.Engine {
 	t.Cleanup(func() { _ = db.Close() })
 
 	r := gin.New()
-	NewHandler(db).RegisterRoutes(r)
+	NewHandler(db, testAuthConfig()).RegisterRoutes(r)
 	return r
+}
+
+func loginAsAdmin(t *testing.T, r *gin.Engine) string {
+	t.Helper()
+	body, err := json.Marshal(LoginRequest{Password: testAdminPassword})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp LoginResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp.Token)
+	return resp.Token
+}
+
+func adminGetRequest(path, token string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	return req
 }
 
 func TestApplicationAndMemberLifecycle(t *testing.T) {
 	r := setupTestRouter(t)
+	token := loginAsAdmin(t, r)
 
 	// 1. Empty lists return [] rather than null
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/members", nil))
+	r.ServeHTTP(w, adminGetRequest("/members", token))
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "[]", w.Body.String())
 
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/applications", nil))
+	r.ServeHTTP(w, adminGetRequest("/applications", token))
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "[]", w.Body.String())
 
-	// 2. POST /applications creates both member and immutable application snapshot
+	// 2. Public POST /applications creates both member and immutable application snapshot
 	sigDate := "2026-11-24"
 	clientID := uuid.NewString()
 	payload := IntakeForm{
@@ -91,7 +129,7 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 
 	// 3. GET /applications lists the created snapshot
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/applications", nil))
+	r.ServeHTTP(w, adminGetRequest("/applications", token))
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var apps []Application
@@ -103,7 +141,7 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 
 	// 4. GET /applications?member_id=... filters by linked member
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/applications?member_id="+created.MemberID, nil))
+	r.ServeHTTP(w, adminGetRequest("/applications?member_id="+created.MemberID, token))
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var filtered []Application
@@ -113,7 +151,7 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 
 	// 5. GET /applications/:id returns exact snapshot
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/applications/"+created.ID, nil))
+	r.ServeHTTP(w, adminGetRequest("/applications/"+created.ID, token))
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var fetchedApp Application
@@ -123,7 +161,7 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 
 	// 6. GET /members lists the member with full_name, date_of_birth, normalized phone
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/members", nil))
+	r.ServeHTTP(w, adminGetRequest("/members", token))
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.NotContains(t, w.Body.String(), `"status"`)
 
@@ -137,7 +175,7 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 
 	// 7. GET /members/:id returns the created member
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/members/"+created.MemberID, nil))
+	r.ServeHTTP(w, adminGetRequest("/members/"+created.MemberID, token))
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var member Member
@@ -149,6 +187,7 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 
 func TestValidationAndNotFound(t *testing.T) {
 	r := setupTestRouter(t)
+	token := loginAsAdmin(t, r)
 
 	// Missing required first_name / last_name / id / phone / dob -> 400
 	req := httptest.NewRequest(http.MethodPost, "/applications", bytes.NewBufferString(`{"email":"a@b.com"}`))
@@ -185,19 +224,20 @@ func TestValidationAndNotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
-	// Unknown member ID -> 404
+	// Unknown member ID -> 404 (authenticated admin)
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/members/"+uuid.NewString(), nil))
+	r.ServeHTTP(w, adminGetRequest("/members/"+uuid.NewString(), token))
 	assert.Equal(t, http.StatusNotFound, w.Code)
 
-	// Unknown application ID -> 404
+	// Unknown application ID -> 404 (authenticated admin)
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/applications/"+uuid.NewString(), nil))
+	r.ServeHTTP(w, adminGetRequest("/applications/"+uuid.NewString(), token))
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestCreateApplicationIdempotencyAndCompoundKey(t *testing.T) {
 	r := setupTestRouter(t)
+	token := loginAsAdmin(t, r)
 
 	clientID := uuid.NewString()
 	payload := IntakeForm{
@@ -214,7 +254,7 @@ func TestCreateApplicationIdempotencyAndCompoundKey(t *testing.T) {
 	body, err := json.Marshal(payload)
 	require.NoError(t, err)
 
-	// 1. First submission creates member + application
+	// 1. First submission creates member + application (no auth required)
 	req1 := httptest.NewRequest(http.MethodPost, "/applications", bytes.NewReader(body))
 	req1.Header.Set("Content-Type", "application/json")
 	w1 := httptest.NewRecorder()
@@ -251,16 +291,16 @@ func TestCreateApplicationIdempotencyAndCompoundKey(t *testing.T) {
 	r.ServeHTTP(w3, req3)
 	require.Equal(t, http.StatusConflict, w3.Code)
 
-	// 4. Confirm only 1 member and 1 application exist
+	// 4. Confirm only 1 member and 1 application exist (admin view)
 	wMembers := httptest.NewRecorder()
-	r.ServeHTTP(wMembers, httptest.NewRequest(http.MethodGet, "/members", nil))
+	r.ServeHTTP(wMembers, adminGetRequest("/members", token))
 	require.Equal(t, http.StatusOK, wMembers.Code)
 	var members []Member
 	require.NoError(t, json.Unmarshal(wMembers.Body.Bytes(), &members))
 	assert.Len(t, members, 1)
 
 	wApps := httptest.NewRecorder()
-	r.ServeHTTP(wApps, httptest.NewRequest(http.MethodGet, "/applications", nil))
+	r.ServeHTTP(wApps, adminGetRequest("/applications", token))
 	require.Equal(t, http.StatusOK, wApps.Code)
 	var apps []Application
 	require.NoError(t, json.Unmarshal(wApps.Body.Bytes(), &apps))
@@ -269,6 +309,7 @@ func TestCreateApplicationIdempotencyAndCompoundKey(t *testing.T) {
 
 func TestMemberOrderingByFullName(t *testing.T) {
 	r := setupTestRouter(t)
+	token := loginAsAdmin(t, r)
 
 	entries := []IntakeForm{
 		{ID: uuid.NewString(), FirstName: "Zara", LastName: "Mensah", Phone: "555-0001", DateOfBirth: "1992-03-14"},
@@ -287,7 +328,7 @@ func TestMemberOrderingByFullName(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/members", nil))
+	r.ServeHTTP(w, adminGetRequest("/members", token))
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var members []Member
