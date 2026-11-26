@@ -2,13 +2,20 @@ package binder
 
 // Member represents a church member record.
 type Member struct {
-	ID          string `json:"id"`
-	FullName    string `json:"full_name"`
-	DateOfBirth string `json:"date_of_birth"`
-	Phone       string `json:"phone"`
-	Email       string `json:"email"`
-	Address     string `json:"address"`
-	JoinedAt    string `json:"joined_at"`
+	ID          string   `json:"id"`
+	FullName    string   `json:"full_name"`
+	DateOfBirth string   `json:"date_of_birth"`
+	Phone       string   `json:"phone"`
+	Email       string   `json:"email"`
+	Address     string   `json:"address"`
+	JoinedAt    string   `json:"joined_at"`
+	Tags        []string `json:"tags"`
+}
+
+// PatchMemberTagsRequest is the JSON payload submitted to PATCH /members/:id/tags.
+type PatchMemberTagsRequest struct {
+	Add    []string `json:"add"`
+	Remove []string `json:"remove"`
 }
 
 // Application represents an immutable intake snapshot linked to a member.

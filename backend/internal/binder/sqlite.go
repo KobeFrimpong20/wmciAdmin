@@ -41,5 +41,10 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 
+	if err := seedTags(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("seed tags: %w", err)
+	}
+
 	return db, nil
 }
