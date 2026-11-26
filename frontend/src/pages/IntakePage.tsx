@@ -17,6 +17,7 @@ import type { IntakeFormPayload } from '../types/member';
 import { PageShell } from '../components/PageShell';
 import { Button } from '../components/Button';
 import { buttonStyles } from '../components/buttonStyles';
+import { useAuth } from '../context/authContext';
 
 const STEPS = ['Personal Info', 'Demographics', 'Spiritual Background', 'Commitments'];
 
@@ -507,7 +508,15 @@ function Step4({
   );
 }
 
-function SuccessScreen({ name, onReset }: { name: string; onReset: () => void }) {
+function SuccessScreen({
+  name,
+  isAdmin,
+  onReset,
+}: {
+  name: string;
+  isAdmin: boolean;
+  onReset: () => void;
+}) {
   return (
     <div className="space-y-6 py-4">
       <div className="flex items-start gap-3.5">
@@ -528,9 +537,9 @@ function SuccessScreen({ name, onReset }: { name: string; onReset: () => void })
       </p>
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
-        <Link to="/" className={buttonStyles('primary')}>
+        <Link to={isAdmin ? '/dashboard' : '/'} className={buttonStyles('primary')}>
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-          <span>Return to Directory</span>
+          <span>{isAdmin ? 'Return to Directory' : 'Return to Home'}</span>
         </Link>
         <Button variant="secondary" onClick={onReset}>
           Start Another Application
@@ -540,7 +549,15 @@ function SuccessScreen({ name, onReset }: { name: string; onReset: () => void })
   );
 }
 
-function AlreadyReceivedScreen({ name, onReset }: { name: string; onReset: () => void }) {
+function AlreadyReceivedScreen({
+  name,
+  isAdmin,
+  onReset,
+}: {
+  name: string;
+  isAdmin: boolean;
+  onReset: () => void;
+}) {
   return (
     <div className="space-y-6 py-4">
       <div className="flex items-start gap-3.5">
@@ -573,9 +590,9 @@ function AlreadyReceivedScreen({ name, onReset }: { name: string; onReset: () =>
         <Button variant="primary" onClick={onReset}>
           Start New Application
         </Button>
-        <Link to="/" className={buttonStyles('secondary')}>
+        <Link to={isAdmin ? '/dashboard' : '/'} className={buttonStyles('secondary')}>
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-          <span>Return to Directory</span>
+          <span>{isAdmin ? 'Return to Directory' : 'Return to Home'}</span>
         </Link>
       </div>
     </div>
@@ -583,6 +600,7 @@ function AlreadyReceivedScreen({ name, onReset }: { name: string; onReset: () =>
 }
 
 const IntakePage = () => {
+  const { isAdmin } = useAuth();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<IntakeFormFields>(() => createInitialForm());
   const [error, setError] = useState('');
@@ -676,8 +694,8 @@ const IntakePage = () => {
           </p>
         </header>
 
-        {/* Share Registration Link */}
-        <ShareLinkPanel url={INTAKE_URL} />
+        {/* Share Registration Link (Admin only) */}
+        {isAdmin && <ShareLinkPanel url={INTAKE_URL} />}
 
         {/* Validation / Submission Error Banner (separate top-level surface) */}
         {error && submissionState === 'idle' && (
@@ -693,9 +711,9 @@ const IntakePage = () => {
         {/* Form Surface */}
         <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">
           {submissionState === 'created' ? (
-            <SuccessScreen name={applicantName} onReset={handleReset} />
+            <SuccessScreen name={applicantName} isAdmin={isAdmin} onReset={handleReset} />
           ) : submissionState === 'duplicate' ? (
-            <AlreadyReceivedScreen name={applicantName} onReset={handleReset} />
+            <AlreadyReceivedScreen name={applicantName} isAdmin={isAdmin} onReset={handleReset} />
           ) : (
             <form onSubmit={handleSubmit} noValidate>
               <StepIndicator current={step} />
