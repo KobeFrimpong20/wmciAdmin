@@ -128,6 +128,16 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 		return
 	}
 
+	if !form.AttendanceCommitment ||
+		!form.TitheCommitment ||
+		!form.PrayerCommitment ||
+		!form.SoberCommitment ||
+		!form.RespectCommitment ||
+		!form.FaithCommitment {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "All membership commitments must be agreed to before submitting"})
+		return
+	}
+
 	email := strings.TrimSpace(form.Email)
 	address := strings.TrimSpace(form.Address)
 

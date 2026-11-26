@@ -62,11 +62,17 @@ func TestProtectedRoutesEnforceAdminRBAC(t *testing.T) {
 
 	// Seed one record publicly so detail endpoints also have real IDs to protect
 	seed := IntakeForm{
-		ID:          uuid.NewString(),
-		FirstName:   "Kwame",
-		LastName:    "Nkrumah",
-		Phone:       "555-999-0000",
-		DateOfBirth: "1980-09-21",
+		ID:                   uuid.NewString(),
+		FirstName:            "Kwame",
+		LastName:             "Nkrumah",
+		Phone:                "555-999-0000",
+		DateOfBirth:          "1980-09-21",
+		AttendanceCommitment: true,
+		TitheCommitment:      true,
+		PrayerCommitment:     true,
+		SoberCommitment:      true,
+		RespectCommitment:    true,
+		FaithCommitment:      true,
 	}
 	seedBody, err := json.Marshal(seed)
 	require.NoError(t, err)

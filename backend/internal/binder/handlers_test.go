@@ -224,6 +224,27 @@ func TestValidationAndNotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
+	// Missing one or more mandatory commitments -> 400
+	incompleteCommitments, err := json.Marshal(IntakeForm{
+		ID:                   uuid.NewString(),
+		FirstName:            "Grace",
+		LastName:             "Hopper",
+		Phone:                "555-0100",
+		DateOfBirth:          "1990-12-09",
+		AttendanceCommitment: true,
+		TitheCommitment:      true,
+		PrayerCommitment:     true,
+		SoberCommitment:      false,
+		RespectCommitment:    true,
+		FaithCommitment:      true,
+	})
+	require.NoError(t, err)
+	req = httptest.NewRequest(http.MethodPost, "/applications", bytes.NewReader(incompleteCommitments))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
 	// Unknown member ID -> 404 (authenticated admin)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, adminGetRequest("/members/"+uuid.NewString(), token))
@@ -248,6 +269,10 @@ func TestCreateApplicationIdempotencyAndCompoundKey(t *testing.T) {
 		Phone:                "(555) 234-5678",
 		DateOfBirth:          "1985-12-10",
 		AttendanceCommitment: true,
+		TitheCommitment:      true,
+		PrayerCommitment:     true,
+		SoberCommitment:      true,
+		RespectCommitment:    true,
 		FaithCommitment:      true,
 	}
 
@@ -276,11 +301,17 @@ func TestCreateApplicationIdempotencyAndCompoundKey(t *testing.T) {
 
 	// 3. Different client UUID, same person with differently formatted name & phone -> 409 Conflict
 	duplicatePerson := IntakeForm{
-		ID:          uuid.NewString(),
-		FirstName:   "  ADA ",
-		LastName:    " lovelace ",
-		Phone:       "555.234.5678",
-		DateOfBirth: "1985-12-10",
+		ID:                   uuid.NewString(),
+		FirstName:            "  ADA ",
+		LastName:             " lovelace ",
+		Phone:                "555.234.5678",
+		DateOfBirth:          "1985-12-10",
+		AttendanceCommitment: true,
+		TitheCommitment:      true,
+		PrayerCommitment:     true,
+		SoberCommitment:      true,
+		RespectCommitment:    true,
+		FaithCommitment:      true,
 	}
 	dupBody, err := json.Marshal(duplicatePerson)
 	require.NoError(t, err)
@@ -312,9 +343,21 @@ func TestMemberOrderingByFullName(t *testing.T) {
 	token := loginAsAdmin(t, r)
 
 	entries := []IntakeForm{
-		{ID: uuid.NewString(), FirstName: "Zara", LastName: "Mensah", Phone: "555-0001", DateOfBirth: "1992-03-14"},
-		{ID: uuid.NewString(), FirstName: "Daniel", LastName: "Boateng", Phone: "555-0002", DateOfBirth: "1988-07-21"},
-		{ID: uuid.NewString(), FirstName: "Aaron", LastName: "Mensah", Phone: "555-0003", DateOfBirth: "1995-11-02"},
+		{
+			ID: uuid.NewString(), FirstName: "Zara", LastName: "Mensah", Phone: "555-0001", DateOfBirth: "1992-03-14",
+			AttendanceCommitment: true, TitheCommitment: true, PrayerCommitment: true,
+			SoberCommitment: true, RespectCommitment: true, FaithCommitment: true,
+		},
+		{
+			ID: uuid.NewString(), FirstName: "Daniel", LastName: "Boateng", Phone: "555-0002", DateOfBirth: "1988-07-21",
+			AttendanceCommitment: true, TitheCommitment: true, PrayerCommitment: true,
+			SoberCommitment: true, RespectCommitment: true, FaithCommitment: true,
+		},
+		{
+			ID: uuid.NewString(), FirstName: "Aaron", LastName: "Mensah", Phone: "555-0003", DateOfBirth: "1995-11-02",
+			AttendanceCommitment: true, TitheCommitment: true, PrayerCommitment: true,
+			SoberCommitment: true, RespectCommitment: true, FaithCommitment: true,
+		},
 	}
 
 	for _, entry := range entries {
