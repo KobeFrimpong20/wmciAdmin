@@ -84,7 +84,7 @@ const MemberDetail = () => {
       <div className="space-y-8">
         <div>
           <Link
-            to="/"
+            to="/dashboard"
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-accent transition-colors duration-150"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />

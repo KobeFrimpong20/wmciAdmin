@@ -103,7 +103,7 @@ const ApplicationDetail = () => {
         {/* Top Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Link
-            to="/"
+            to="/dashboard"
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-accent transition-colors duration-150"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />

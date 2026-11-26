@@ -28,5 +28,6 @@ export const membersApi = {
     apiClient<Application>('/applications', {
       method: 'POST',
       body: JSON.stringify(data),
+      skipAuth: true,
     }),
 };

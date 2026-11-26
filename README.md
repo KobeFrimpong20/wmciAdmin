@@ -27,11 +27,14 @@ A digital replacement for physical church membership binders, built for congrega
 ```text
 .
 ├── backend/
-│   ├── cmd/api/main.go               # Server entrypoint (:8080) and CORS setup
+│   ├── .env.example                  # Required auth & DB environment variables
+│   ├── cmd/api/main.go               # Server entrypoint (:8080), env validation, CORS setup
 │   ├── internal/binder/
 │   │   ├── schema.sql                # Embedded SQLite schema (members & applications)
 │   │   ├── sqlite.go                 # DB initialization, WAL pragmas, schema apply
 │   │   ├── models.go                 # Member, Application, and IntakeForm structs
+│   │   ├── auth.go                   # Single-password admin login, HS256 JWT, RequireRole RBAC middleware
+│   │   ├── auth_test.go              # Auth & RBAC enforcement tests (401/403/200)
 │   │   ├── handlers.go               # REST handlers, normalization, idempotency checks
 │   │   └── handlers_test.go          # API lifecycle, validation, idempotency, and ordering tests
 │   └── go.mod
@@ -40,18 +43,24 @@ A digital replacement for physical church membership binders, built for congrega
     ├── index.html                    # Google Fonts (Lora, Work Sans, IBM Plex Mono)
     └── src/
         ├── api/
-        │   ├── client.ts             # Fetch wrapper + ApiError with HTTP status
+        │   ├── client.ts             # Fetch wrapper, Bearer JWT attachment, 401 handling
+        │   ├── auth.ts               # Login & session verification API methods
         │   └── members.ts            # Members & applications API methods
+        ├── context/
+        │   ├── authContext.ts        # Auth context definition & useAuth hook
+        │   └── AuthProvider.tsx      # AuthProvider (localStorage token + /auth/me check)
         ├── components/
         │   ├── Button.tsx            # Primary & secondary editorial button component
         │   ├── buttonStyles.ts       # Shared button class generator
-        │   ├── PageShell.tsx         # Masthead navigation, layout container, footer
+        │   ├── PageShell.tsx         # Role-aware masthead navigation, layout container, footer
+        │   ├── ProtectedRoute.tsx    # Admin route guard redirecting unauthenticated users to /
         │   └── MemberCard.tsx        # Directory card with actionable mailto:/tel: links
         ├── pages/
-        │   ├── Dashboard.tsx         # Tabbed Applications & Members directory with live filter
-        │   ├── MemberDetail.tsx      # Member profile & linked application snapshots
-        │   ├── ApplicationDetail.tsx # Read-only dossier view of an application snapshot
-        │   └── IntakePage.tsx        # 4-step intake form with sessionStorage UUID idempotency
+        │   ├── Home.tsx              # Split landing page (Left: Admin Sign In, Right: New Application)
+        │   ├── Dashboard.tsx         # Admin-only tabbed Applications & Members directory
+        │   ├── MemberDetail.tsx      # Admin-only member profile & linked application snapshots
+        │   ├── ApplicationDetail.tsx # Admin-only read-only dossier view of an application snapshot
+        │   └── IntakePage.tsx        # Public 4-step intake form with sessionStorage UUID idempotency
         └── types/
             └── member.ts             # TypeScript API models
 ```
@@ -93,13 +102,15 @@ To prevent duplicate member or application rows from double-clicks, flaky networ
 
 Base URL: `http://localhost:8080`
 
-| Method | Endpoint | Description | Status Codes |
-|---|---|---|---|
-| `GET` | `/members` | List all members ordered by `full_name` | `200` |
-| `GET` | `/members/:id` | Get a single member by UUID | `200`, `404` |
-| `POST` | `/applications` | Create a member and immutable application snapshot | `201`, `400`, `409` |
-| `GET` | `/applications` | List all applications (newest first); optional `?member_id=<uuid>` filter | `200` |
-| `GET` | `/applications/:id` | Get a single application snapshot by UUID | `200`, `404` |
+| Method | Endpoint | Access | Description | Status Codes |
+|---|---|---|---|---|
+| `POST` | `/login` | Public | Verify shared `ADMIN_PASSWORD` and issue an HS256 JWT (`role: "admin"`) | `200`, `400`, `401` |
+| `POST` | `/applications` | Public | Create a member and immutable application snapshot (idempotent) | `201`, `400`, `409` |
+| `GET` | `/auth/me` | Admin JWT | Verify active session and return `{ "role": "admin" }` | `200`, `401`, `403` |
+| `GET` | `/members` | Admin JWT | List all members ordered by `full_name` | `200`, `401`, `403` |
+| `GET` | `/members/:id` | Admin JWT | Get a single member by UUID | `200`, `401`, `403`, `404` |
+| `GET` | `/applications` | Admin JWT | List all applications (newest first); optional `?member_id=<uuid>` filter | `200`, `401`, `403` |
+| `GET` | `/applications/:id` | Admin JWT | Get a single application snapshot by UUID | `200`, `401`, `403`, `404` |
 
 ### Example `POST /applications` Payload
 
@@ -139,13 +150,18 @@ Base URL: `http://localhost:8080`
 
 ### 1. Run the Backend
 
+Configure `backend/.env` (see `backend/.env.example`):
+- `ADMIN_PASSWORD` (required) — shared administrator password for `POST /login`
+- `JWT_SECRET` (required) — HS256 signing secret
+- `JWT_TTL_HOURS` (optional, defaults to `24`)
+- `DB_PATH` (optional, defaults to `binder.db` in `backend/`)
+
 ```bash
 cd backend
 go run ./cmd/api
 ```
 
 - Starts on `http://localhost:8080`.
-- Uses `DB_PATH` from `backend/.env` or environment variables (defaults to `binder.db` in `backend/`).
 - Automatically initializes the SQLite schema in WAL mode on startup.
 
 ### 2. Run the Frontend
@@ -160,10 +176,11 @@ npm run dev
 - Optional environment variable: `VITE_API_URL` (defaults to `http://localhost:8080`).
 
 ### Frontend Routes
-- `/` or `/dashboard` — Congregation Binder (Applications & Members directory)
+- `/` — Split landing page (Left: Admin Sign In, Right: Start New Application); redirects signed-in admins to `/dashboard`
 - `/intake` — Public 4-step Membership Application form
-- `/members/:id` — Member profile and linked application snapshots
-- `/applications/:id` — Immutable application snapshot dossier
+- `/dashboard` — *(Admin only)* Congregation Binder (Applications & Members directory)
+- `/members/:id` — *(Admin only)* Member profile and linked application snapshots
+- `/applications/:id` — *(Admin only)* Immutable application snapshot dossier
 
 ---
 
