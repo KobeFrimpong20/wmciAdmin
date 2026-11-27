@@ -234,16 +234,15 @@ const Dashboard = () => {
                     applications.length === 0 ? (
                         <div className="bg-surface border border-border rounded-lg p-10 text-center space-y-4">
                             <h2 className="font-heading text-2xl font-normal text-foreground">
-                                No membership applications yet
+                                No pending applications
                             </h2>
                             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                                Submitted applications will appear here with their contact snapshot and commitment
-                                summary.
+                                New membership intake submissions waiting for registrar review will appear here.
                             </p>
                             <div className="pt-2">
                                 <Link to="/intake" className={buttonStyles('primary')}>
                                     <Plus className="w-4 h-4" aria-hidden="true" />
-                                    <span>Start First Application</span>
+                                    <span>Start New Application</span>
                                 </Link>
                             </div>
                         </div>
@@ -326,7 +325,7 @@ const Dashboard = () => {
 
                                         <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
                                             <span className="font-accent text-xs text-muted-foreground tabular-nums">
-                                                {app.pastor_signature_date ? 'Pastor signed' : 'Pending pastor review'}
+                                                {app.pastor_signature_date ? 'Registrar signed' : 'Pending registrar review'}
                                             </span>
                                             <Link
                                                 to={`/applications/${app.id}`}
@@ -347,7 +346,7 @@ const Dashboard = () => {
                             No members in the directory yet
                         </h2>
                         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                            Members are added automatically when a new intake application is submitted.
+                            Members appear here once their intake application has been accepted.
                         </p>
                         <div className="pt-2">
                             <Link to="/intake" className={buttonStyles('primary')}>

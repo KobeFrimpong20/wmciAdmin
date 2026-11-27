@@ -1,8 +1,10 @@
 import { apiClient } from './client';
 import type {
-  Member,
+  AcceptApplicationPayload,
+  AcceptApplicationResponse,
   Application,
   IntakeFormPayload,
+  Member,
   PatchMemberTagsPayload,
 } from '../types/member';
 
@@ -33,6 +35,17 @@ export const membersApi = {
   getApplicationById: (id: string) =>
     apiClient<Application>(`/applications/${id}`, {
       method: 'GET',
+    }),
+
+  acceptApplication: (id: string, payload?: AcceptApplicationPayload) =>
+    apiClient<AcceptApplicationResponse>(`/applications/${id}/accept`, {
+      method: 'POST',
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+    }),
+
+  rejectApplication: (id: string) =>
+    apiClient<void>(`/applications/${id}`, {
+      method: 'DELETE',
     }),
 
   submitIntake: (data: IntakeFormPayload) =>

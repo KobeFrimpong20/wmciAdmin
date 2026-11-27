@@ -135,12 +135,28 @@ const MemberDetail = () => {
               </p>
             </header>
 
-            {/* Member Labels Line & Dropdown Bank */}
-            <MemberLabelBar
-              memberId={member.id}
-              savedTags={member.tags || []}
-              onUpdated={updatedMember => setMember(updatedMember)}
-            />
+            {/* Member Labels Line & Dropdown Bank (Accepted Members Only) */}
+            {member.membership_status === 'accepted' ? (
+              <MemberLabelBar
+                memberId={member.id}
+                savedTags={member.tags || []}
+                onUpdated={updatedMember => setMember(updatedMember)}
+              />
+            ) : (
+              <div className="py-2.5 border-t border-b border-border flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+                <span>
+                  This applicant is pending registrar approval. Labels are available once accepted.
+                </span>
+                {applications[0] && (
+                  <Link
+                    to={`/applications/${applications[0].id}`}
+                    className="text-accent hover:text-accent-hover hover:underline font-medium"
+                  >
+                    Review Pending Application
+                  </Link>
+                )}
+              </div>
+            )}
 
             {/* Contact Details Panel */}
             <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">

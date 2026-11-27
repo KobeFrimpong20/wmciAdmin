@@ -553,7 +553,7 @@ func (h *Handler) AcceptApplication(c *gin.Context) {
 	if req.PastorSignatureDate != nil && strings.TrimSpace(*req.PastorSignatureDate) != "" {
 		parsed, err := normalizeDateOfBirth(*req.PastorSignatureDate)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Pastor signature date must be a valid date in YYYY-MM-DD format"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Registrar signature date must be a valid date in YYYY-MM-DD format"})
 			return
 		}
 		sigDate = parsed
@@ -612,7 +612,7 @@ func (h *Handler) AcceptApplication(c *gin.Context) {
 		SET pastor_signature_date = ?
 		WHERE id = ?
 	`, sigDate, app.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record pastor signature date"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record registrar signature date"})
 		return
 	}
 
