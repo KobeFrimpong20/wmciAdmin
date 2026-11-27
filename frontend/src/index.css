@@ -13,6 +13,20 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-wash: var(--accent-wash);
 
+  /* Tag Category Palette — Status (Amber/Terracotta), Leadership (Navy), Service (Sage) */
+  --color-tag-status-bg: var(--tag-status-bg);
+  --color-tag-status-text: var(--tag-status-text);
+  --color-tag-status-border: var(--tag-status-border);
+  --color-tag-leadership-bg: var(--tag-leadership-bg);
+  --color-tag-leadership-text: var(--tag-leadership-text);
+  --color-tag-leadership-border: var(--tag-leadership-border);
+  --color-tag-service-bg: var(--tag-service-bg);
+  --color-tag-service-text: var(--tag-service-text);
+  --color-tag-service-border: var(--tag-service-border);
+  --color-tag-ghost-bg: var(--tag-ghost-bg);
+  --color-tag-ghost-text: var(--tag-ghost-text);
+  --color-tag-ghost-border: var(--tag-ghost-border);
+
   /* Typography — The Three Voices Rule */
   --font-heading: "Lora", ui-serif, Georgia, serif;
   --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
@@ -37,6 +51,18 @@
     --accent-pressed: #17304d;
     --accent-foreground: #ffffff;
     --accent-wash: #eef3f8;
+    --tag-status-bg: #fdf2e9;
+    --tag-status-text: #9a3412;
+    --tag-status-border: #f5cba7;
+    --tag-leadership-bg: #eef3f8;
+    --tag-leadership-text: #1f3a5f;
+    --tag-leadership-border: #b8cbe0;
+    --tag-service-bg: #ecf5f0;
+    --tag-service-text: #1f5c3e;
+    --tag-service-border: #b4d8c5;
+    --tag-ghost-bg: transparent;
+    --tag-ghost-text: #44403c;
+    --tag-ghost-border: #78716c;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -52,6 +78,18 @@
       --accent-pressed: #6791bc;
       --accent-foreground: #0f1a28;
       --accent-wash: #1b2838;
+      --tag-status-bg: #321f14;
+      --tag-status-text: #f6b385;
+      --tag-status-border: #6c3b1e;
+      --tag-leadership-bg: #1b2838;
+      --tag-leadership-text: #9bc0e6;
+      --tag-leadership-border: #355070;
+      --tag-service-bg: #162921;
+      --tag-service-text: #8cd1ae;
+      --tag-service-border: #2b5441;
+      --tag-ghost-bg: transparent;
+      --tag-ghost-text: #d6d3d1;
+      --tag-ghost-border: #a8a29e;
     }
   }
 
@@ -99,4 +137,12 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+}
+
+.label-pill-interactive {
+  transition: box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.label-pill-interactive:hover {
+  box-shadow: 0 0 12px color-mix(in srgb, currentColor 38%, transparent);
 }

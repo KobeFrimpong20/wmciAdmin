@@ -6,6 +6,12 @@ export interface Member {
   email: string;
   address: string;
   joined_at: string;
+  tags: string[];
+}
+
+export interface PatchMemberTagsPayload {
+  add?: string[];
+  remove?: string[];
 }
 
 export interface Application {
