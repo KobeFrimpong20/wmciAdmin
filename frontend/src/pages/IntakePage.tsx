@@ -127,7 +127,7 @@ const COMMITMENTS: { key: keyof IntakeFormFields; label: string }[] = [
         key: 'sober_commitment',
         label: 'I commit to a life consecrated to God, and seperated from wordly amusements and ' +
             'habits such as Gambling, lodges, or secret societies, use of all forms of tobacco ' +
-            'and all alcoholic beverages',
+            'and alcohol.',
     },
     {
         key: 'faith_commitment',
@@ -153,20 +153,20 @@ function StepIndicator({ current }: { current: number }) {
                     >
                         <span
                             className={`font-accent text-xs w-6 h-6 shrink-0 rounded-sm flex items-center justify-center tabular-nums border ${isCompleted
-                                    ? 'bg-accent text-accent-foreground border-accent'
-                                    : isCurrent
-                                        ? 'bg-accent-wash text-accent border-accent font-medium'
-                                        : 'bg-paper text-muted-foreground border-border'
+                                ? 'bg-accent text-accent-foreground border-accent'
+                                : isCurrent
+                                    ? 'bg-accent-wash text-accent border-accent font-medium'
+                                    : 'bg-paper text-muted-foreground border-border'
                                 }`}
                         >
                             {isCompleted ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : i + 1}
                         </span>
                         <span
                             className={`text-xs truncate ${isCurrent
-                                    ? 'text-accent font-medium'
-                                    : isCompleted
-                                        ? 'text-foreground'
-                                        : 'text-muted-foreground'
+                                ? 'text-accent font-medium'
+                                : isCompleted
+                                    ? 'text-foreground'
+                                    : 'text-muted-foreground'
                                 }`}
                         >
                             {label}
@@ -430,8 +430,8 @@ function Step3({
                                         aria-pressed={selected}
                                         onClick={() => onBool(key, val)}
                                         className={`px-4 py-1.5 rounded-sm text-sm font-medium border transition-colors duration-150 cursor-pointer ${selected
-                                                ? 'bg-accent text-accent-foreground border-accent'
-                                                : 'bg-surface text-muted-foreground border-border hover:bg-accent-wash hover:text-accent hover:border-accent'
+                                            ? 'bg-accent text-accent-foreground border-accent'
+                                            : 'bg-surface text-muted-foreground border-border hover:bg-accent-wash hover:text-accent hover:border-accent'
                                             }`}
                                     >
                                         {val ? 'Yes' : 'No'}
