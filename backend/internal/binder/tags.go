@@ -12,6 +12,8 @@ const (
 	TagCategoryStatus     TagCategory = "status"
 	TagCategoryLeadership TagCategory = "leadership"
 	TagCategoryService    TagCategory = "service"
+
+	DefaultMemberTag = "active"
 )
 
 // TagDefinition defines a canonical member tag in the fixed tag catalog.
@@ -25,6 +27,8 @@ type TagDefinition struct {
 // Note: "leadership" is a category only, not an assignable tag.
 var TagCatalog = []TagDefinition{
 	// Status
+	{Name: "active", Label: "Active", Category: TagCategoryStatus},
+	{Name: "inactive", Label: "Inactive", Category: TagCategoryStatus},
 	{Name: "ex-communicated", Label: "Ex-Communicated", Category: TagCategoryStatus},
 	{Name: "out of state", Label: "Out of State", Category: TagCategoryStatus},
 	{Name: "out of country", Label: "Out of Country", Category: TagCategoryStatus},
@@ -65,7 +69,8 @@ func IsValidTag(name string) bool {
 	return ok
 }
 
-// seedTags inserts the fixed tag catalog into the tags table idempotently.
+// seedTags inserts the fixed tag catalog into the tags table idempotently and
+// backfills the default "active" tag for legacy members that have no tags yet.
 func seedTags(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -83,6 +88,17 @@ func seedTags(db *sql.DB) error {
 		if _, err := stmt.Exec(def.Name); err != nil {
 			return err
 		}
+	}
+
+	if _, err := tx.Exec(`
+		INSERT OR IGNORE INTO member_tags (member_id, tag_name)
+		SELECT m.id, ?
+		FROM members m
+		WHERE NOT EXISTS (
+			SELECT 1 FROM member_tags mt WHERE mt.member_id = m.id
+		)
+	`, DefaultMemberTag); err != nil {
+		return err
 	}
 
 	return tx.Commit()

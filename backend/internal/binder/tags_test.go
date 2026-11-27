@@ -72,11 +72,44 @@ func TestOpenDBSeedsFixedTags(t *testing.T) {
 	require.NoError(t, rows.Err())
 
 	assert.Len(t, seeded, len(TagCatalog))
-	assert.Len(t, TagCatalog, 14)
+	assert.Len(t, TagCatalog, 16)
 	for _, def := range TagCatalog {
 		assert.True(t, seeded[def.Name], "expected tag %q to be seeded", def.Name)
 	}
+	assert.True(t, seeded["active"])
+	assert.True(t, seeded["inactive"])
 	assert.False(t, seeded["leadership"], "leadership should be a category only, not a tag")
+}
+
+func TestSeedTagsBackfillsLegacyMembersWithActive(t *testing.T) {
+	db, err := OpenDB(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Insert a legacy member with no rows in member_tags, and an inactive member
+	legacyID := uuid.NewString()
+	inactiveID := uuid.NewString()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_, err = db.Exec(`
+		INSERT INTO members (id, full_name, date_of_birth, phone, email, address, joined_at)
+		VALUES (?, 'Mensah, Legacy', '1990-01-01', '5550001111', '', '', ?),
+		       (?, 'Mensah, Inactive', '1991-02-02', '5550002222', '', '', ?)
+	`, legacyID, now, inactiveID, now)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO member_tags (member_id, tag_name) VALUES (?, 'inactive')`, inactiveID)
+	require.NoError(t, err)
+
+	require.NoError(t, seedTags(db))
+
+	legacyTags, err := fetchMemberTags(t.Context(), db, legacyID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"active"}, legacyTags)
+
+	inactiveTags, err := fetchMemberTags(t.Context(), db, inactiveID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"inactive"}, inactiveTags)
 }
 
 func TestPatchMemberTagsEnforcesAdminRBAC(t *testing.T) {
@@ -103,13 +136,13 @@ func TestPatchMemberTagsLifecycle(t *testing.T) {
 	created := createTestMember(t, r)
 	path := "/members/" + created.MemberID + "/tags"
 
-	// 1. New member starts with empty [] tags (not null)
+	// 1. New member defaults to ["active"]
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, adminGetRequest("/members/"+created.MemberID, token))
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), `"tags":[]`)
+	assert.Contains(t, w.Body.String(), `"tags":["active"]`)
 
-	// 2. Add tags with mixed casing/whitespace -> normalized, sorted, persisted
+	// 2. Add tags with mixed casing/whitespace -> normalized, sorted, persisted alongside "active"
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, adminPatchRequest(path, token, PatchMemberTagsRequest{
 		Add: []string{"  Out Of State ", "PASTOR", "usher", "usher"},
@@ -118,7 +151,7 @@ func TestPatchMemberTagsLifecycle(t *testing.T) {
 
 	var updated Member
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updated))
-	assert.Equal(t, []string{"out of state", "pastor", "usher"}, updated.Tags)
+	assert.Equal(t, []string{"active", "out of state", "pastor", "usher"}, updated.Tags)
 
 	// 3. Re-adding an already-assigned tag is idempotent
 	w = httptest.NewRecorder()
@@ -127,17 +160,17 @@ func TestPatchMemberTagsLifecycle(t *testing.T) {
 	}))
 	require.Equal(t, http.StatusOK, w.Code)
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updated))
-	assert.Equal(t, []string{"media", "out of state", "pastor", "usher"}, updated.Tags)
+	assert.Equal(t, []string{"active", "media", "out of state", "pastor", "usher"}, updated.Tags)
 
-	// 4. Simultaneous incremental add + remove (including removing an unassigned tag as a no-op)
+	// 4. Simultaneous incremental add + remove (switching active -> inactive, plus removing unassigned tag as no-op)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, adminPatchRequest(path, token, PatchMemberTagsRequest{
-		Add:    []string{"board", "ex-communicated"},
-		Remove: []string{"out of state", "cleaning"},
+		Add:    []string{"board", "ex-communicated", "inactive"},
+		Remove: []string{"active", "out of state", "cleaning"},
 	}))
 	require.Equal(t, http.StatusOK, w.Code)
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updated))
-	assert.Equal(t, []string{"board", "ex-communicated", "media", "pastor", "usher"}, updated.Tags)
+	assert.Equal(t, []string{"board", "ex-communicated", "inactive", "media", "pastor", "usher"}, updated.Tags)
 
 	// 5. GET /members and GET /members/:id both return the hydrated tags
 	wList := httptest.NewRecorder()
@@ -146,14 +179,22 @@ func TestPatchMemberTagsLifecycle(t *testing.T) {
 	var list []Member
 	require.NoError(t, json.Unmarshal(wList.Body.Bytes(), &list))
 	require.Len(t, list, 1)
-	assert.Equal(t, []string{"board", "ex-communicated", "media", "pastor", "usher"}, list[0].Tags)
+	assert.Equal(t, []string{"board", "ex-communicated", "inactive", "media", "pastor", "usher"}, list[0].Tags)
 
 	wDetail := httptest.NewRecorder()
 	r.ServeHTTP(wDetail, adminGetRequest("/members/"+created.MemberID, token))
 	require.Equal(t, http.StatusOK, wDetail.Code)
 	var detail Member
 	require.NoError(t, json.Unmarshal(wDetail.Body.Bytes(), &detail))
-	assert.Equal(t, []string{"board", "ex-communicated", "media", "pastor", "usher"}, detail.Tags)
+	assert.Equal(t, []string{"board", "ex-communicated", "inactive", "media", "pastor", "usher"}, detail.Tags)
+
+	// 6. Removing all tags returns empty JSON array [] rather than null
+	wClear := httptest.NewRecorder()
+	r.ServeHTTP(wClear, adminPatchRequest(path, token, PatchMemberTagsRequest{
+		Remove: []string{"board", "ex-communicated", "inactive", "media", "pastor", "usher"},
+	}))
+	require.Equal(t, http.StatusOK, wClear.Code)
+	assert.Contains(t, wClear.Body.String(), `"tags":[]`)
 }
 
 func TestPatchMemberTagsValidationAndNotFound(t *testing.T) {
@@ -181,13 +222,13 @@ func TestPatchMemberTagsValidationAndNotFound(t *testing.T) {
 	}))
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
-	// Confirm no partial write occurred from rejected request
+	// Confirm no partial write occurred from rejected request (only default "active" remains)
 	wCheck := httptest.NewRecorder()
 	r.ServeHTTP(wCheck, adminGetRequest("/members/"+created.MemberID, token))
 	require.Equal(t, http.StatusOK, wCheck.Code)
 	var member Member
 	require.NoError(t, json.Unmarshal(wCheck.Body.Bytes(), &member))
-	assert.Empty(t, member.Tags)
+	assert.Equal(t, []string{"active"}, member.Tags)
 
 	// Same tag in both add and remove -> 400
 	w = httptest.NewRecorder()

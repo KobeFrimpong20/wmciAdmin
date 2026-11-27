@@ -379,6 +379,15 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 		return
 	}
 
+	if _, err = tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO member_tags (member_id, tag_name)
+		VALUES (?, ?)
+	`, memberID, DefaultMemberTag); err != nil {
+		_ = tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign default member tag"})
+		return
+	}
+
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO applications (
 			id, member_id,
