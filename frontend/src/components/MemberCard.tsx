@@ -1,6 +1,8 @@
 import { ArrowRight, Mail, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Member } from '../types/member';
+import { sortTagsByCatalog } from '../constants/tags';
+import { MemberLabel } from './MemberLabel';
 
 interface MemberCardProps {
   member: Member;
@@ -23,6 +25,7 @@ function toTelHref(phone: string): string {
 
 const MemberCard = ({ member }: MemberCardProps) => {
   const fullName = member.full_name?.trim() || 'Unnamed Member';
+  const sortedTags = sortTagsByCatalog(member.tags || []);
 
   return (
     <article className="bg-surface border border-border rounded-lg p-6 transition-colors duration-150 hover:border-accent flex flex-col justify-between gap-5">
@@ -40,6 +43,14 @@ const MemberCard = ({ member }: MemberCardProps) => {
             Joined {formatDate(member.joined_at)}
           </span>
         </div>
+
+        {sortedTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5" aria-label="Member labels">
+            {sortedTags.map(tag => (
+              <MemberLabel key={tag} tag={tag} />
+            ))}
+          </div>
+        )}
 
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">

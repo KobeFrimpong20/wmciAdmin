@@ -45,6 +45,17 @@ CREATE TABLE IF NOT EXISTS applications (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tags (
+    name TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS member_tags (
+    member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    tag_name TEXT NOT NULL REFERENCES tags(name) ON DELETE CASCADE,
+    PRIMARY KEY (member_id, tag_name)
+);
+
 CREATE INDEX IF NOT EXISTS idx_members_full_name ON members(full_name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_applications_member_id ON applications(member_id);
 CREATE INDEX IF NOT EXISTS idx_applications_created_at ON applications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_member_tags_tag_name ON member_tags(tag_name);

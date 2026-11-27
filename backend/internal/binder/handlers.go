@@ -1,6 +1,7 @@
 package binder
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -35,13 +36,15 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		admin.GET("/auth/me", h.GetCurrentSession)
 		admin.GET("/members", h.GetMembers)
 		admin.GET("/members/:id", h.GetMemberByID)
+		admin.PATCH("/members/:id/tags", h.PatchMemberTags)
 		admin.GET("/applications", h.GetApplications)
 		admin.GET("/applications/:id", h.GetApplicationByID)
 	}
 }
 
 func (h *Handler) GetMembers(c *gin.Context) {
-	rows, err := h.DB.QueryContext(c.Request.Context(), `
+	ctx := c.Request.Context()
+	rows, err := h.DB.QueryContext(ctx, `
 		SELECT id, full_name, date_of_birth, phone, email, address, joined_at
 		FROM members
 		ORDER BY full_name COLLATE NOCASE
@@ -53,12 +56,15 @@ func (h *Handler) GetMembers(c *gin.Context) {
 	defer rows.Close()
 
 	members := []Member{}
+	memberIndex := make(map[string]int)
 	for rows.Next() {
 		var m Member
 		if err := rows.Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan member"})
 			return
 		}
+		m.Tags = []string{}
+		memberIndex[m.ID] = len(members)
 		members = append(members, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -66,14 +72,43 @@ func (h *Handler) GetMembers(c *gin.Context) {
 		return
 	}
 
+	if len(members) > 0 {
+		tagRows, err := h.DB.QueryContext(ctx, `
+			SELECT member_id, tag_name
+			FROM member_tags
+			ORDER BY tag_name ASC
+		`)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch member tags"})
+			return
+		}
+		defer tagRows.Close()
+
+		for tagRows.Next() {
+			var memberID, tagName string
+			if err := tagRows.Scan(&memberID, &tagName); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan member tag"})
+				return
+			}
+			if idx, ok := memberIndex[memberID]; ok {
+				members[idx].Tags = append(members[idx].Tags, tagName)
+			}
+		}
+		if err := tagRows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read member tags"})
+			return
+		}
+	}
+
 	c.JSON(http.StatusOK, members)
 }
 
 func (h *Handler) GetMemberByID(c *gin.Context) {
+	ctx := c.Request.Context()
 	id := c.Param("id")
 
 	var m Member
-	err := h.DB.QueryRowContext(c.Request.Context(), `
+	err := h.DB.QueryRowContext(ctx, `
 		SELECT id, full_name, date_of_birth, phone, email, address, joined_at
 		FROM members
 		WHERE id = ?
@@ -87,7 +122,158 @@ func (h *Handler) GetMemberByID(c *gin.Context) {
 		return
 	}
 
+	tags, err := fetchMemberTags(ctx, h.DB, m.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch member tags"})
+		return
+	}
+	m.Tags = tags
+
 	c.JSON(http.StatusOK, m)
+}
+
+func (h *Handler) PatchMemberTags(c *gin.Context) {
+	id := c.Param("id")
+
+	var req PatchMemberTagsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tag update payload: " + err.Error()})
+		return
+	}
+
+	addTags, invalidAdd := normalizeAndValidateTagList(req.Add)
+	if invalidAdd != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tag: " + invalidAdd})
+		return
+	}
+
+	removeTags, invalidRemove := normalizeAndValidateTagList(req.Remove)
+	if invalidRemove != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tag: " + invalidRemove})
+		return
+	}
+
+	if len(addTags) == 0 && len(removeTags) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one tag to add or remove is required"})
+		return
+	}
+
+	addSet := make(map[string]struct{}, len(addTags))
+	for _, tag := range addTags {
+		addSet[tag] = struct{}{}
+	}
+	for _, tag := range removeTags {
+		if _, conflict := addSet[tag]; conflict {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot both add and remove tag: " + tag})
+			return
+		}
+	}
+
+	ctx := c.Request.Context()
+	tx, err := h.DB.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	var m Member
+	err = tx.QueryRowContext(ctx, `
+		SELECT id, full_name, date_of_birth, phone, email, address, joined_at
+		FROM members
+		WHERE id = ?
+	`, id).Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch member"})
+		return
+	}
+
+	for _, tag := range addTags {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT OR IGNORE INTO member_tags (member_id, tag_name)
+			VALUES (?, ?)
+		`, m.ID, tag); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add member tag"})
+			return
+		}
+	}
+
+	for _, tag := range removeTags {
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM member_tags
+			WHERE member_id = ? AND tag_name = ?
+		`, m.ID, tag); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove member tag"})
+			return
+		}
+	}
+
+	tags, err := fetchMemberTags(ctx, tx, m.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read updated member tags"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit member tags"})
+		return
+	}
+
+	m.Tags = tags
+	c.JSON(http.StatusOK, m)
+}
+
+type queryRunner interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func fetchMemberTags(ctx context.Context, q queryRunner, memberID string) ([]string, error) {
+	rows, err := q.QueryContext(ctx, `
+		SELECT tag_name
+		FROM member_tags
+		WHERE member_id = ?
+		ORDER BY tag_name ASC
+	`, memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tags := []string{}
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+func normalizeAndValidateTagList(rawTags []string) ([]string, string) {
+	normalized := make([]string, 0, len(rawTags))
+	seen := make(map[string]struct{}, len(rawTags))
+
+	for _, raw := range rawTags {
+		tag := NormalizeTagName(raw)
+		if tag == "" || !IsValidTag(tag) {
+			return nil, strings.TrimSpace(raw)
+		}
+		if _, exists := seen[tag]; exists {
+			continue
+		}
+		seen[tag] = struct{}{}
+		normalized = append(normalized, tag)
+	}
+
+	return normalized, ""
 }
 
 func (h *Handler) CreateApplication(c *gin.Context) {
@@ -190,6 +376,15 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create member"})
+		return
+	}
+
+	if _, err = tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO member_tags (member_id, tag_name)
+		VALUES (?, ?)
+	`, memberID, DefaultMemberTag); err != nil {
+		_ = tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign default member tag"})
 		return
 	}
 

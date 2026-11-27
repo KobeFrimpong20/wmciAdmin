@@ -4,6 +4,7 @@ import { membersApi } from '../api/members';
 import type { Member, Application } from '../types/member';
 import { PageShell } from '../components/PageShell';
 import { Button } from '../components/Button';
+import { MemberLabelBar } from '../components/MemberLabelBar';
 import { AlertCircle, ArrowLeft, ChevronRight } from 'lucide-react';
 
 function formatDate(value: string): string {
@@ -133,6 +134,13 @@ const MemberDetail = () => {
                 Member ID {member.id} &middot; Joined {formatDate(member.joined_at)}
               </p>
             </header>
+
+            {/* Member Labels Line & Dropdown Bank */}
+            <MemberLabelBar
+              memberId={member.id}
+              savedTags={member.tags || []}
+              onUpdated={updatedMember => setMember(updatedMember)}
+            />
 
             {/* Contact Details Panel */}
             <section className="bg-surface border border-border rounded-lg p-6 sm:p-8">

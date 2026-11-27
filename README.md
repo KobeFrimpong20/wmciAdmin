@@ -107,8 +107,9 @@ Base URL: `http://localhost:8080`
 | `POST` | `/login` | Public | Verify shared `ADMIN_PASSWORD` and issue an HS256 JWT (`role: "admin"`) | `200`, `400`, `401` |
 | `POST` | `/applications` | Public | Create a member and immutable application snapshot (idempotent) | `201`, `400`, `409` |
 | `GET` | `/auth/me` | Admin JWT | Verify active session and return `{ "role": "admin" }` | `200`, `401`, `403` |
-| `GET` | `/members` | Admin JWT | List all members ordered by `full_name` | `200`, `401`, `403` |
-| `GET` | `/members/:id` | Admin JWT | Get a single member by UUID | `200`, `401`, `403`, `404` |
+| `GET` | `/members` | Admin JWT | List all members ordered by `full_name` (hydrated with `tags`) | `200`, `401`, `403` |
+| `GET` | `/members/:id` | Admin JWT | Get a single member by UUID (hydrated with `tags`) | `200`, `401`, `403`, `404` |
+| `PATCH` | `/members/:id/tags` | Admin JWT | Incrementally `add` / `remove` fixed member tags | `200`, `400`, `401`, `403`, `404` |
 | `GET` | `/applications` | Admin JWT | List all applications (newest first); optional `?member_id=<uuid>` filter | `200`, `401`, `403` |
 | `GET` | `/applications/:id` | Admin JWT | Get a single application snapshot by UUID | `200`, `401`, `403`, `404` |
 

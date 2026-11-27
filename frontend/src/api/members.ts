@@ -1,5 +1,10 @@
 import { apiClient } from './client';
-import type { Member, Application, IntakeFormPayload } from '../types/member';
+import type {
+  Member,
+  Application,
+  IntakeFormPayload,
+  PatchMemberTagsPayload,
+} from '../types/member';
 
 export const membersApi = {
   getAllMembers: () =>
@@ -10,6 +15,12 @@ export const membersApi = {
   getMemberById: (id: string) =>
     apiClient<Member>(`/members/${id}`, {
       method: 'GET',
+    }),
+
+  patchMemberTags: (id: string, payload: PatchMemberTagsPayload) =>
+    apiClient<Member>(`/members/${id}/tags`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     }),
 
   getAllApplications: (memberId?: string) => {
