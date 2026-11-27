@@ -1,21 +1,38 @@
 package binder
 
+const (
+	MembershipStatusPending  = "pending"
+	MembershipStatusAccepted = "accepted"
+)
+
 // Member represents a church member record.
 type Member struct {
-	ID          string   `json:"id"`
-	FullName    string   `json:"full_name"`
-	DateOfBirth string   `json:"date_of_birth"`
-	Phone       string   `json:"phone"`
-	Email       string   `json:"email"`
-	Address     string   `json:"address"`
-	JoinedAt    string   `json:"joined_at"`
-	Tags        []string `json:"tags"`
+	ID               string   `json:"id"`
+	FullName         string   `json:"full_name"`
+	DateOfBirth      string   `json:"date_of_birth"`
+	Phone            string   `json:"phone"`
+	Email            string   `json:"email"`
+	Address          string   `json:"address"`
+	JoinedAt         string   `json:"joined_at"`
+	MembershipStatus string   `json:"membership_status"`
+	Tags             []string `json:"tags"`
 }
 
 // PatchMemberTagsRequest is the JSON payload submitted to PATCH /members/:id/tags.
 type PatchMemberTagsRequest struct {
 	Add    []string `json:"add"`
 	Remove []string `json:"remove"`
+}
+
+// AcceptApplicationRequest is the optional JSON payload submitted to POST /applications/:id/accept.
+type AcceptApplicationRequest struct {
+	PastorSignatureDate *string `json:"pastor_signature_date"`
+}
+
+// AcceptApplicationResponse is returned when a pending application is accepted into membership.
+type AcceptApplicationResponse struct {
+	Application Application `json:"application"`
+	Member      Member      `json:"member"`
 }
 
 // Application represents an immutable intake snapshot linked to a member.

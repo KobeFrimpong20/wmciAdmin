@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -39,16 +40,19 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		admin.PATCH("/members/:id/tags", h.PatchMemberTags)
 		admin.GET("/applications", h.GetApplications)
 		admin.GET("/applications/:id", h.GetApplicationByID)
+		admin.POST("/applications/:id/accept", h.AcceptApplication)
+		admin.DELETE("/applications/:id", h.RejectApplication)
 	}
 }
 
 func (h *Handler) GetMembers(c *gin.Context) {
 	ctx := c.Request.Context()
 	rows, err := h.DB.QueryContext(ctx, `
-		SELECT id, full_name, date_of_birth, phone, email, address, joined_at
+		SELECT id, full_name, date_of_birth, phone, email, address, joined_at, membership_status
 		FROM members
+		WHERE membership_status = ?
 		ORDER BY full_name COLLATE NOCASE
-	`)
+	`, MembershipStatusAccepted)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch members"})
 		return
@@ -59,7 +63,7 @@ func (h *Handler) GetMembers(c *gin.Context) {
 	memberIndex := make(map[string]int)
 	for rows.Next() {
 		var m Member
-		if err := rows.Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt, &m.MembershipStatus); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan member"})
 			return
 		}
@@ -109,10 +113,10 @@ func (h *Handler) GetMemberByID(c *gin.Context) {
 
 	var m Member
 	err := h.DB.QueryRowContext(ctx, `
-		SELECT id, full_name, date_of_birth, phone, email, address, joined_at
+		SELECT id, full_name, date_of_birth, phone, email, address, joined_at, membership_status
 		FROM members
 		WHERE id = ?
-	`, id).Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt)
+	`, id).Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt, &m.MembershipStatus)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
@@ -179,16 +183,21 @@ func (h *Handler) PatchMemberTags(c *gin.Context) {
 
 	var m Member
 	err = tx.QueryRowContext(ctx, `
-		SELECT id, full_name, date_of_birth, phone, email, address, joined_at
+		SELECT id, full_name, date_of_birth, phone, email, address, joined_at, membership_status
 		FROM members
 		WHERE id = ?
-	`, id).Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt)
+	`, id).Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt, &m.MembershipStatus)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch member"})
+		return
+	}
+
+	if m.MembershipStatus != MembershipStatusAccepted {
+		c.JSON(http.StatusConflict, gin.H{"error": "Pending members must be accepted before editing tags"})
 		return
 	}
 
@@ -363,9 +372,9 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 	memberID := uuid.NewString()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO members (id, full_name, date_of_birth, phone, email, address, joined_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, memberID, fullName, dob, phone, email, address, now)
+		INSERT INTO members (id, full_name, date_of_birth, phone, email, address, joined_at, membership_status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, memberID, fullName, dob, phone, email, address, now, MembershipStatusPending)
 	if err != nil {
 		_ = tx.Rollback()
 		if lookupErr := h.DB.QueryRowContext(ctx, `
@@ -376,15 +385,6 @@ func (h *Handler) CreateApplication(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create member"})
-		return
-	}
-
-	if _, err = tx.ExecContext(ctx, `
-		INSERT OR IGNORE INTO member_tags (member_id, tag_name)
-		VALUES (?, ?)
-	`, memberID, DefaultMemberTag); err != nil {
-		_ = tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign default member tag"})
 		return
 	}
 
@@ -460,6 +460,16 @@ const selectApplicationColumns = `
 	member_signature_date, pastor_signature_date, created_at
 `
 
+const selectPrefixedApplicationColumns = `
+	a.id, a.member_id,
+	a.full_name, a.email, a.phone, a.address,
+	a.date_of_birth, a.marital_status, a.spouse_name, a.num_children,
+	a.born_again, a.water_baptized, a.speak_tongues, a.prev_church,
+	a.attendance_commitment, a.tithe_commitment, a.prayer_commitment,
+	a.sober_commitment, a.respect_commitment, a.faith_commitment,
+	a.member_signature_date, a.pastor_signature_date, a.created_at
+`
+
 func (h *Handler) GetApplications(c *gin.Context) {
 	ctx := c.Request.Context()
 	memberID := strings.TrimSpace(c.Query("member_id"))
@@ -477,10 +487,12 @@ func (h *Handler) GetApplications(c *gin.Context) {
 		`, memberID)
 	} else {
 		rows, err = h.DB.QueryContext(ctx, `
-			SELECT `+selectApplicationColumns+`
-			FROM applications
-			ORDER BY created_at DESC
-		`)
+			SELECT `+selectPrefixedApplicationColumns+`
+			FROM applications a
+			INNER JOIN members m ON m.id = a.member_id
+			WHERE m.membership_status = ?
+			ORDER BY a.created_at DESC
+		`, MembershipStatusPending)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch applications"})
@@ -525,6 +537,159 @@ func (h *Handler) GetApplicationByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, app)
+}
+
+func (h *Handler) AcceptApplication(c *gin.Context) {
+	id := c.Param("id")
+
+	var req AcceptApplicationRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid accept payload: " + err.Error()})
+		return
+	}
+
+	nowUTC := time.Now().UTC()
+	sigDate := nowUTC.Format("2006-01-02")
+	if req.PastorSignatureDate != nil && strings.TrimSpace(*req.PastorSignatureDate) != "" {
+		parsed, err := normalizeDateOfBirth(*req.PastorSignatureDate)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Pastor signature date must be a valid date in YYYY-MM-DD format"})
+			return
+		}
+		sigDate = parsed
+	}
+
+	ctx := c.Request.Context()
+	tx, err := h.DB.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	app, err := scanApplication(tx.QueryRowContext(ctx, `
+		SELECT `+selectApplicationColumns+`
+		FROM applications
+		WHERE id = ?
+	`, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Application not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch application"})
+		return
+	}
+
+	var m Member
+	err = tx.QueryRowContext(ctx, `
+		SELECT id, full_name, date_of_birth, phone, email, address, joined_at, membership_status
+		FROM members
+		WHERE id = ?
+	`, app.MemberID).Scan(&m.ID, &m.FullName, &m.DateOfBirth, &m.Phone, &m.Email, &m.Address, &m.JoinedAt, &m.MembershipStatus)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch linked member"})
+		return
+	}
+
+	if m.MembershipStatus == MembershipStatusAccepted {
+		c.JSON(http.StatusConflict, gin.H{"error": "Application has already been accepted"})
+		return
+	}
+
+	joinedAt := nowUTC.Format(time.RFC3339)
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE members
+		SET membership_status = ?, joined_at = ?
+		WHERE id = ?
+	`, MembershipStatusAccepted, joinedAt, m.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to accept member"})
+		return
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE applications
+		SET pastor_signature_date = ?
+		WHERE id = ?
+	`, sigDate, app.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record pastor signature date"})
+		return
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO member_tags (member_id, tag_name)
+		VALUES (?, ?)
+	`, m.ID, DefaultMemberTag); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign default active tag"})
+		return
+	}
+
+	tags, err := fetchMemberTags(ctx, tx, m.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read member tags"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit application acceptance"})
+		return
+	}
+
+	app.PastorSignatureDate = &sigDate
+	m.MembershipStatus = MembershipStatusAccepted
+	m.JoinedAt = joinedAt
+	m.Tags = tags
+
+	c.JSON(http.StatusOK, AcceptApplicationResponse{
+		Application: app,
+		Member:      m,
+	})
+}
+
+func (h *Handler) RejectApplication(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	tx, err := h.DB.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	var memberID, status string
+	err = tx.QueryRowContext(ctx, `
+		SELECT a.member_id, m.membership_status
+		FROM applications a
+		INNER JOIN members m ON m.id = a.member_id
+		WHERE a.id = ?
+	`, id).Scan(&memberID, &status)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Application not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch application"})
+		return
+	}
+
+	if status != MembershipStatusPending {
+		c.JSON(http.StatusConflict, gin.H{"error": "Cannot reject an already accepted member"})
+		return
+	}
+
+	// Deleting the member row cascades to applications and member_tags via ON DELETE CASCADE.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM members WHERE id = ?`, memberID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reject application"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit application rejection"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 type rowScanner interface {

@@ -19,6 +19,10 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open sqlite db: %w", err)
 	}
 
+	if dbPath == ":memory:" {
+		db.SetMaxOpenConns(1)
+	}
+
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("ping sqlite db: %w", err)
@@ -41,10 +45,69 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 
+	if err := migrateMembersStatus(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate members membership_status: %w", err)
+	}
+
 	if err := seedTags(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("seed tags: %w", err)
 	}
 
 	return db, nil
+}
+
+// migrateMembersStatus ensures existing SQLite databases created before membership_status
+// existed receive the column (backfilled to 'accepted' for existing congregation members)
+// and creates the membership_status index.
+func migrateMembersStatus(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(members)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	hasStatusColumn := false
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			colType   string
+			notNull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return err
+		}
+		if name == "membership_status" {
+			hasStatusColumn = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+
+	if !hasStatusColumn {
+		if _, err := db.Exec(`
+			ALTER TABLE members
+			ADD COLUMN membership_status TEXT NOT NULL DEFAULT 'accepted'
+			CHECK(membership_status IN ('pending', 'accepted'))
+		`); err != nil {
+			return err
+		}
+	}
+
+	if _, err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_members_membership_status ON members(membership_status)
+	`); err != nil {
+		return err
+	}
+
+	return nil
 }

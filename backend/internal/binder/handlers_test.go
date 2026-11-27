@@ -63,6 +63,19 @@ func adminGetRequest(path, token string) *http.Request {
 	return req
 }
 
+func acceptApplicationAsAdmin(t *testing.T, r *gin.Engine, appID, token string) AcceptApplicationResponse {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/applications/"+appID+"/accept", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp AcceptApplicationResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	return resp
+}
+
 func TestApplicationAndMemberLifecycle(t *testing.T) {
 	r := setupTestRouter(t)
 	token := loginAsAdmin(t, r)
@@ -159,7 +172,18 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 	assert.Equal(t, created.ID, fetchedApp.ID)
 	assert.Equal(t, "First Grace", fetchedApp.PrevChurch)
 
-	// 6. GET /members lists the member with full_name, date_of_birth, normalized phone
+	// 6. Pending member does not appear in GET /members until accepted
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, adminGetRequest("/members", token))
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "[]", w.Body.String())
+
+	// 7. Accept the application -> member appears in GET /members with active tag
+	accepted := acceptApplicationAsAdmin(t, r, created.ID, token)
+	assert.Equal(t, MembershipStatusAccepted, accepted.Member.MembershipStatus)
+	assert.Equal(t, []string{"active"}, accepted.Member.Tags)
+	require.NotNil(t, accepted.Application.PastorSignatureDate)
+
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, adminGetRequest("/members", token))
 	require.Equal(t, http.StatusOK, w.Code)
@@ -172,8 +196,10 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 	assert.Equal(t, "Hopper, Grace", members[0].FullName)
 	assert.Equal(t, "1990-12-09", members[0].DateOfBirth)
 	assert.Equal(t, "5550100000", members[0].Phone)
+	assert.Equal(t, MembershipStatusAccepted, members[0].MembershipStatus)
+	assert.Equal(t, []string{"active"}, members[0].Tags)
 
-	// 7. GET /members/:id returns the created member
+	// 8. GET /members/:id returns the accepted member
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, adminGetRequest("/members/"+created.MemberID, token))
 	require.Equal(t, http.StatusOK, w.Code)
@@ -183,6 +209,7 @@ func TestApplicationAndMemberLifecycle(t *testing.T) {
 	assert.Equal(t, created.MemberID, member.ID)
 	assert.Equal(t, "Hopper, Grace", member.FullName)
 	assert.Equal(t, "5550100000", member.Phone)
+	assert.Equal(t, MembershipStatusAccepted, member.MembershipStatus)
 }
 
 func TestValidationAndNotFound(t *testing.T) {
@@ -322,20 +349,29 @@ func TestCreateApplicationIdempotencyAndCompoundKey(t *testing.T) {
 	r.ServeHTTP(w3, req3)
 	require.Equal(t, http.StatusConflict, w3.Code)
 
-	// 4. Confirm only 1 member and 1 application exist (admin view)
-	wMembers := httptest.NewRecorder()
-	r.ServeHTTP(wMembers, adminGetRequest("/members", token))
-	require.Equal(t, http.StatusOK, wMembers.Code)
-	var members []Member
-	require.NoError(t, json.Unmarshal(wMembers.Body.Bytes(), &members))
-	assert.Len(t, members, 1)
-
+	// 4. Confirm only 1 pending application exists and 0 accepted members exist yet
 	wApps := httptest.NewRecorder()
 	r.ServeHTTP(wApps, adminGetRequest("/applications", token))
 	require.Equal(t, http.StatusOK, wApps.Code)
 	var apps []Application
 	require.NoError(t, json.Unmarshal(wApps.Body.Bytes(), &apps))
 	assert.Len(t, apps, 1)
+
+	wMembers := httptest.NewRecorder()
+	r.ServeHTTP(wMembers, adminGetRequest("/members", token))
+	require.Equal(t, http.StatusOK, wMembers.Code)
+	var members []Member
+	require.NoError(t, json.Unmarshal(wMembers.Body.Bytes(), &members))
+	assert.Empty(t, members)
+
+	// 5. After accepting, confirm 1 accepted member exists and 0 pending applications remain
+	acceptApplicationAsAdmin(t, r, first.ID, token)
+
+	wMembers = httptest.NewRecorder()
+	r.ServeHTTP(wMembers, adminGetRequest("/members", token))
+	require.Equal(t, http.StatusOK, wMembers.Code)
+	require.NoError(t, json.Unmarshal(wMembers.Body.Bytes(), &members))
+	assert.Len(t, members, 1)
 }
 
 func TestMemberOrderingByFullName(t *testing.T) {
@@ -368,6 +404,7 @@ func TestMemberOrderingByFullName(t *testing.T) {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		require.Equal(t, http.StatusCreated, w.Code)
+		acceptApplicationAsAdmin(t, r, entry.ID, token)
 	}
 
 	w := httptest.NewRecorder()
