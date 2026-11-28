@@ -110,6 +110,7 @@ Base URL: `http://localhost:8080`
 | `GET` | `/members` | Admin JWT | List accepted members ordered by `full_name` (hydrated with `tags`) | `200`, `401`, `403` |
 | `GET` | `/members/:id` | Admin JWT | Get a single member by UUID (hydrated with `membership_status` & `tags`) | `200`, `401`, `403`, `404` |
 | `PATCH` | `/members/:id/tags` | Admin JWT | Incrementally `add` / `remove` fixed member tags (accepted members only) | `200`, `400`, `401`, `403`, `404`, `409` |
+| `DELETE` | `/members/:id` | Admin JWT | Permanently delete a member and cascade-delete linked applications and tags | `204`, `401`, `403`, `404` |
 | `GET` | `/applications` | Admin JWT | List pending applications (newest first); `?member_id=<uuid>` returns all snapshots for that member | `200`, `401`, `403` |
 | `GET` | `/applications/:id` | Admin JWT | Get a single application snapshot by UUID | `200`, `401`, `403`, `404` |
 | `POST` | `/applications/:id/accept` | Admin JWT | Accept a pending application (`membership_status='accepted'`, sets `pastor_signature_date`, adds `active` tag) | `200`, `400`, `401`, `403`, `404`, `409` |

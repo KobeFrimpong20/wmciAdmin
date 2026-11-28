@@ -27,6 +27,14 @@
   --color-tag-ghost-text: var(--tag-ghost-text);
   --color-tag-ghost-border: var(--tag-ghost-border);
 
+  /* Destructive Action Palette — Brick Red */
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-pressed: var(--danger-pressed);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-wash: var(--danger-wash);
+  --color-danger-border: var(--danger-border);
+
   /* Typography — The Three Voices Rule */
   --font-heading: "Lora", ui-serif, Georgia, serif;
   --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
@@ -63,6 +71,12 @@
     --tag-ghost-bg: transparent;
     --tag-ghost-text: #44403c;
     --tag-ghost-border: #78716c;
+    --danger: #9b2c2c;
+    --danger-hover: #b83232;
+    --danger-pressed: #7f1d1d;
+    --danger-foreground: #ffffff;
+    --danger-wash: #fdf2f2;
+    --danger-border: #e5b4b4;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -90,6 +104,12 @@
       --tag-ghost-bg: transparent;
       --tag-ghost-text: #d6d3d1;
       --tag-ghost-border: #a8a29e;
+      --danger: #c84b4b;
+      --danger-hover: #dc5f5f;
+      --danger-pressed: #a83838;
+      --danger-foreground: #ffffff;
+      --danger-wash: #2d1616;
+      --danger-border: #6e2b2b;
     }
   }
 
