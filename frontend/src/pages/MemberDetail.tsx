@@ -4,6 +4,7 @@ import { membersApi } from '../api/members';
 import type { Member, Application } from '../types/member';
 import { PageShell } from '../components/PageShell';
 import { Button } from '../components/Button';
+import { buttonStyles } from '../components/buttonStyles';
 import { MemberLabelBar } from '../components/MemberLabelBar';
 import { AlertCircle, ArrowLeft, ChevronRight } from 'lucide-react';
 
@@ -84,10 +85,7 @@ const MemberDetail = () => {
     <PageShell width="reference">
       <div className="space-y-8">
         <div>
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-accent transition-colors duration-150"
-          >
+          <Link to="/dashboard" className={buttonStyles('secondary')}>
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             <span>Return to Directory</span>
           </Link>
