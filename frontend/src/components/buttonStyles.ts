@@ -1,4 +1,4 @@
-export type ButtonVariant = 'primary' | 'secondary';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 
 export function buttonStyles(variant: ButtonVariant = 'primary', extra = ''): string {
   const base =
@@ -8,6 +8,7 @@ export function buttonStyles(variant: ButtonVariant = 'primary', extra = ''): st
     primary: 'bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-pressed',
     secondary:
       'bg-surface text-foreground border border-border hover:bg-accent-wash hover:text-accent hover:border-accent',
+    danger: 'bg-danger text-danger-foreground hover:bg-danger-hover active:bg-danger-pressed',
   };
 
   return [base, variants[variant], extra].filter(Boolean).join(' ');

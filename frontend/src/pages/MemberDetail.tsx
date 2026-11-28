@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { membersApi } from '../api/members';
 import type { Member, Application } from '../types/member';
 import { PageShell } from '../components/PageShell';
 import { Button } from '../components/Button';
 import { buttonStyles } from '../components/buttonStyles';
 import { MemberLabelBar } from '../components/MemberLabelBar';
-import { AlertCircle, ArrowLeft, ChevronRight } from 'lucide-react';
+import { DeleteMemberModal } from '../components/DeleteMemberModal';
+import { AlertCircle, ArrowLeft, ChevronRight, Trash2 } from 'lucide-react';
 
 function formatDate(value: string): string {
   if (!value) return 'Not recorded';
@@ -38,12 +39,14 @@ function toTelHref(phone: string): string {
 
 const MemberDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   const [member, setMember] = useState<Member | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -260,6 +263,35 @@ const MemberDetail = () => {
                 </ul>
               )}
             </section>
+
+            {/* Danger Zone: Remove Member */}
+            <section className="bg-surface border border-danger-border rounded-lg p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+              <div className="space-y-1">
+                <h2 className="font-heading text-2xl font-normal text-foreground">
+                  Remove Member
+                </h2>
+                <p className="text-sm text-muted-foreground max-w-lg">
+                  Permanently remove this member, their labels, and their linked application
+                  record(s) from the Digital Binder.
+                </p>
+              </div>
+              <Button
+                variant="danger"
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="shrink-0"
+              >
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
+                <span>Remove Member</span>
+              </Button>
+            </section>
+
+            <DeleteMemberModal
+              memberId={member.id}
+              memberName={member.full_name}
+              isOpen={isDeleteModalOpen}
+              onClose={() => setIsDeleteModalOpen(false)}
+              onDeleted={() => navigate('/dashboard', { replace: true })}
+            />
           </>
         )}
       </div>

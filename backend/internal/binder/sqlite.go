@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -11,10 +12,20 @@ import (
 //go:embed schema.sql
 var schemaSQL string
 
+// sqliteDSN ensures every pooled connection opened by go-sqlite3 enables
+// foreign key enforcement and a busy timeout automatically.
+func sqliteDSN(dbPath string) string {
+	sep := "?"
+	if strings.Contains(dbPath, "?") {
+		sep = "&"
+	}
+	return dbPath + sep + "_foreign_keys=on&_busy_timeout=5000"
+}
+
 // OpenDB opens a SQLite database at the given path (or ":memory:"),
 // configures pragmas, and applies the embedded schema.
 func OpenDB(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite3", sqliteDSN(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db: %w", err)
 	}

@@ -25,6 +25,11 @@ export const membersApi = {
       body: JSON.stringify(payload),
     }),
 
+  deleteMember: (id: string) =>
+    apiClient<void>(`/members/${id}`, {
+      method: 'DELETE',
+    }),
+
   getAllApplications: (memberId?: string) => {
     const query = memberId ? `?member_id=${encodeURIComponent(memberId)}` : '';
     return apiClient<Application[]>(`/applications${query}`, {
