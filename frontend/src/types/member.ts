@@ -1,3 +1,5 @@
+export type MembershipStatus = 'pending' | 'accepted';
+
 export interface Member {
   id: string;
   full_name: string;
@@ -6,12 +8,22 @@ export interface Member {
   email: string;
   address: string;
   joined_at: string;
+  membership_status: MembershipStatus;
   tags: string[];
 }
 
 export interface PatchMemberTagsPayload {
   add?: string[];
   remove?: string[];
+}
+
+export interface AcceptApplicationPayload {
+  pastor_signature_date?: string;
+}
+
+export interface AcceptApplicationResponse {
+  application: Application;
+  member: Member;
 }
 
 export interface Application {

@@ -86,16 +86,19 @@ func TestSeedTagsBackfillsLegacyMembersWithActive(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// Insert a legacy member with no rows in member_tags, and an inactive member
+	// Insert an accepted legacy member with no rows in member_tags,
+	// an accepted member with 'inactive', and a pending member with no tags.
 	legacyID := uuid.NewString()
 	inactiveID := uuid.NewString()
+	pendingID := uuid.NewString()
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	_, err = db.Exec(`
-		INSERT INTO members (id, full_name, date_of_birth, phone, email, address, joined_at)
-		VALUES (?, 'Mensah, Legacy', '1990-01-01', '5550001111', '', '', ?),
-		       (?, 'Mensah, Inactive', '1991-02-02', '5550002222', '', '', ?)
-	`, legacyID, now, inactiveID, now)
+		INSERT INTO members (id, full_name, date_of_birth, phone, email, address, joined_at, membership_status)
+		VALUES (?, 'Mensah, Legacy', '1990-01-01', '5550001111', '', '', ?, 'accepted'),
+		       (?, 'Mensah, Inactive', '1991-02-02', '5550002222', '', '', ?, 'accepted'),
+		       (?, 'Mensah, Pending', '1992-03-03', '5550003333', '', '', ?, 'pending')
+	`, legacyID, now, inactiveID, now, pendingID, now)
 	require.NoError(t, err)
 
 	_, err = db.Exec(`INSERT INTO member_tags (member_id, tag_name) VALUES (?, 'inactive')`, inactiveID)
@@ -110,6 +113,10 @@ func TestSeedTagsBackfillsLegacyMembersWithActive(t *testing.T) {
 	inactiveTags, err := fetchMemberTags(t.Context(), db, inactiveID)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"inactive"}, inactiveTags)
+
+	pendingTags, err := fetchMemberTags(t.Context(), db, pendingID)
+	require.NoError(t, err)
+	assert.Empty(t, pendingTags)
 }
 
 func TestPatchMemberTagsEnforcesAdminRBAC(t *testing.T) {
@@ -136,7 +143,15 @@ func TestPatchMemberTagsLifecycle(t *testing.T) {
 	created := createTestMember(t, r)
 	path := "/members/" + created.MemberID + "/tags"
 
-	// 1. New member defaults to ["active"]
+	// 0. Pending member cannot be tagged until accepted -> 409
+	wPending := httptest.NewRecorder()
+	r.ServeHTTP(wPending, adminPatchRequest(path, token, PatchMemberTagsRequest{Add: []string{"usher"}}))
+	assert.Equal(t, http.StatusConflict, wPending.Code)
+
+	// Accept member so they enter the active directory with default ["active"]
+	acceptApplicationAsAdmin(t, r, created.ID, token)
+
+	// 1. Accepted member defaults to ["active"]
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, adminGetRequest("/members/"+created.MemberID, token))
 	require.Equal(t, http.StatusOK, w.Code)
@@ -201,6 +216,7 @@ func TestPatchMemberTagsValidationAndNotFound(t *testing.T) {
 	r := setupTestRouter(t)
 	token := loginAsAdmin(t, r)
 	created := createTestMember(t, r)
+	acceptApplicationAsAdmin(t, r, created.ID, token)
 	path := "/members/" + created.MemberID + "/tags"
 
 	// Empty add & remove -> 400

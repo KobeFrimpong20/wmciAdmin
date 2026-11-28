@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS members (
     email TEXT NOT NULL DEFAULT '',
     address TEXT NOT NULL DEFAULT '',
     joined_at TEXT NOT NULL,
+    membership_status TEXT NOT NULL DEFAULT 'pending' CHECK(membership_status IN ('pending', 'accepted')),
     UNIQUE(full_name, date_of_birth, phone)
 );
 

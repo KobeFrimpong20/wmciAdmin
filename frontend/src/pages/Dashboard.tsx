@@ -6,7 +6,17 @@ import MemberCard from '../components/MemberCard';
 import { Button } from '../components/Button';
 import { buttonStyles } from '../components/buttonStyles';
 import { PageShell } from '../components/PageShell';
-import { AlertCircle, ArrowRight, Mail, Phone, Plus, Search } from 'lucide-react';
+import {
+    AlertCircle,
+    ArrowRight,
+    Check,
+    Loader2,
+    Mail,
+    Phone,
+    Plus,
+    Search,
+    Trash2,
+} from 'lucide-react';
 
 type ActiveTab = 'applications' | 'members';
 
@@ -44,6 +54,9 @@ const Dashboard = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [reloadKey, setReloadKey] = useState(0);
+    const [busyActions, setBusyActions] = useState<Record<string, 'accepting' | 'rejecting'>>({});
+    const [confirmRejectId, setConfirmRejectId] = useState<string | null>(null);
+    const [actionError, setActionError] = useState('');
 
     useEffect(() => {
         let isMounted = true;
@@ -78,6 +91,56 @@ const Dashboard = () => {
         setIsLoading(true);
         setError('');
         setReloadKey(k => k + 1);
+    };
+
+    const handleAcceptApplication = async (app: Application) => {
+        setActionError('');
+        setConfirmRejectId(prev => (prev === app.id ? null : prev));
+        setBusyActions(prev => ({ ...prev, [app.id]: 'accepting' }));
+        try {
+            const response = await membersApi.acceptApplication(app.id);
+            setApplications(prev => prev.filter(item => item.id !== app.id));
+            setMembers(prev => {
+                const next = [...prev.filter(m => m.id !== response.member.id), response.member];
+                return next.sort((a, b) =>
+                    a.full_name.localeCompare(b.full_name, undefined, { sensitivity: 'base' })
+                );
+            });
+        } catch (err: unknown) {
+            setActionError(
+                err instanceof Error
+                    ? err.message
+                    : `Unable to accept ${app.full_name}. Please try again.`
+            );
+        } finally {
+            setBusyActions(prev => {
+                const next = { ...prev };
+                delete next[app.id];
+                return next;
+            });
+        }
+    };
+
+    const handleRejectApplication = async (app: Application) => {
+        setActionError('');
+        setBusyActions(prev => ({ ...prev, [app.id]: 'rejecting' }));
+        try {
+            await membersApi.rejectApplication(app.id);
+            setApplications(prev => prev.filter(item => item.id !== app.id));
+            setConfirmRejectId(prev => (prev === app.id ? null : prev));
+        } catch (err: unknown) {
+            setActionError(
+                err instanceof Error
+                    ? err.message
+                    : `Unable to reject ${app.full_name}. Please try again.`
+            );
+        } finally {
+            setBusyActions(prev => {
+                const next = { ...prev };
+                delete next[app.id];
+                return next;
+            });
+        }
     };
 
     const normalizedQuery = query.trim().toLowerCase();
@@ -234,16 +297,15 @@ const Dashboard = () => {
                     applications.length === 0 ? (
                         <div className="bg-surface border border-border rounded-lg p-10 text-center space-y-4">
                             <h2 className="font-heading text-2xl font-normal text-foreground">
-                                No membership applications yet
+                                No pending applications
                             </h2>
                             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                                Submitted applications will appear here with their contact snapshot and commitment
-                                summary.
+                                New membership intake submissions waiting for registrar review will appear here.
                             </p>
                             <div className="pt-2">
                                 <Link to="/intake" className={buttonStyles('primary')}>
                                     <Plus className="w-4 h-4" aria-hidden="true" />
-                                    <span>Start First Application</span>
+                                    <span>Start New Application</span>
                                 </Link>
                             </div>
                         </div>
@@ -262,83 +324,190 @@ const Dashboard = () => {
                             </div>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {filteredApplications.map(app => {
-                                const fullName = app.full_name?.trim() || 'Unnamed Applicant';
-                                const commitments = countCommitments(app);
+                        <div className="space-y-6">
+                            {actionError && (
+                                <div
+                                    role="alert"
+                                    className="bg-surface border border-foreground rounded-lg p-4 flex items-start gap-3"
+                                >
+                                    <AlertCircle
+                                        className="w-5 h-5 text-foreground shrink-0 mt-0.5"
+                                        aria-hidden="true"
+                                    />
+                                    <p className="text-sm text-foreground">{actionError}</p>
+                                </div>
+                            )}
 
-                                return (
-                                    <article
-                                        key={app.id}
-                                        className="bg-surface border border-border rounded-lg p-6 transition-colors duration-150 hover:border-accent flex flex-col justify-between gap-5"
-                                    >
-                                        <div className="space-y-4">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <h3 className="font-heading text-2xl font-normal text-foreground leading-snug">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {filteredApplications.map(app => {
+                                    const fullName = app.full_name?.trim() || 'Unnamed Applicant';
+                                    const commitments = countCommitments(app);
+                                    const busyState = busyActions[app.id];
+                                    const isAccepting = busyState === 'accepting';
+                                    const isRejecting = busyState === 'rejecting';
+                                    const isBusy = Boolean(busyState);
+                                    const isConfirmingReject = confirmRejectId === app.id;
+
+                                    return (
+                                        <article
+                                            key={app.id}
+                                            className="bg-surface border border-border rounded-lg p-6 transition-colors duration-150 hover:border-accent flex flex-col justify-between gap-5"
+                                        >
+                                            <div className="space-y-4">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <h3 className="font-heading text-2xl font-normal text-foreground leading-snug">
+                                                            <Link
+                                                                to={`/applications/${app.id}`}
+                                                                className="hover:text-accent transition-colors duration-150"
+                                                            >
+                                                                {fullName}
+                                                            </Link>
+                                                        </h3>
+                                                        <p className="font-accent text-xs text-muted-foreground mt-1 truncate tabular-nums">
+                                                            Submitted {formatDate(app.created_at)}
+                                                        </p>
+                                                    </div>
+
+                                                    <span className="shrink-0 bg-accent-wash text-accent font-body text-xs font-medium px-2.5 py-1 rounded-sm tabular-nums">
+                                                        {commitments}/6 Commitments
+                                                    </span>
+                                                </div>
+
+                                                <div className="space-y-2 text-sm">
+                                                    <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">
+                                                        <Mail className="w-4 h-4 shrink-0" aria-hidden="true" />
+                                                        {app.email ? (
+                                                            <a
+                                                                href={`mailto:${app.email}`}
+                                                                className="truncate text-foreground hover:text-accent hover:underline transition-colors duration-150"
+                                                            >
+                                                                {app.email}
+                                                            </a>
+                                                        ) : (
+                                                            <span>No email provided</span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">
+                                                        <Phone className="w-4 h-4 shrink-0" aria-hidden="true" />
+                                                        {app.phone ? (
+                                                            <a
+                                                                href={toTelHref(app.phone)}
+                                                                className="truncate text-foreground hover:text-accent hover:underline transition-colors duration-150 tabular-nums"
+                                                            >
+                                                                {app.phone}
+                                                            </a>
+                                                        ) : (
+                                                            <span>No phone provided</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-4 border-t border-border space-y-3">
+                                                {isConfirmingReject ? (
+                                                    <div className="space-y-3">
+                                                        <p className="text-xs text-foreground">
+                                                            Permanently delete the application for{' '}
+                                                            <span className="font-medium">{fullName}</span>?
+                                                        </p>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <Button
+                                                                variant="primary"
+                                                                onClick={() => handleRejectApplication(app)}
+                                                                disabled={isBusy}
+                                                                className="px-3.5 py-1.5 text-xs"
+                                                            >
+                                                                {isRejecting ? (
+                                                                    <>
+                                                                        <Loader2
+                                                                            className="w-3.5 h-3.5 animate-spin"
+                                                                            aria-hidden="true"
+                                                                        />
+                                                                        <span>Deleting...</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Trash2
+                                                                            className="w-3.5 h-3.5"
+                                                                            aria-hidden="true"
+                                                                        />
+                                                                        <span>Confirm Reject</span>
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                            <Button
+                                                                variant="secondary"
+                                                                onClick={() => {
+                                                                    setActionError('');
+                                                                    setConfirmRejectId(null);
+                                                                }}
+                                                                disabled={isBusy}
+                                                                className="px-3.5 py-1.5 text-xs"
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                variant="primary"
+                                                                onClick={() => handleAcceptApplication(app)}
+                                                                disabled={isBusy}
+                                                                className="px-3.5 py-1.5 text-xs"
+                                                            >
+                                                                {isAccepting ? (
+                                                                    <>
+                                                                        <Loader2
+                                                                            className="w-3.5 h-3.5 animate-spin"
+                                                                            aria-hidden="true"
+                                                                        />
+                                                                        <span>Accepting...</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Check
+                                                                            className="w-3.5 h-3.5"
+                                                                            aria-hidden="true"
+                                                                        />
+                                                                        <span>Accept</span>
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                            <Button
+                                                                variant="secondary"
+                                                                onClick={() => {
+                                                                    setActionError('');
+                                                                    setConfirmRejectId(app.id);
+                                                                }}
+                                                                disabled={isBusy}
+                                                                className="px-3.5 py-1.5 text-xs"
+                                                            >
+                                                                <Trash2
+                                                                    className="w-3.5 h-3.5"
+                                                                    aria-hidden="true"
+                                                                />
+                                                                <span>Reject</span>
+                                                            </Button>
+                                                        </div>
+
                                                         <Link
                                                             to={`/applications/${app.id}`}
-                                                            className="hover:text-accent transition-colors duration-150"
+                                                            className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors duration-150"
                                                         >
-                                                            {fullName}
+                                                            <span>Review</span>
+                                                            <ArrowRight className="w-4 h-4" aria-hidden="true" />
                                                         </Link>
-                                                    </h3>
-                                                    <p className="font-accent text-xs text-muted-foreground mt-1 truncate tabular-nums">
-                                                        Submitted {formatDate(app.created_at)}
-                                                    </p>
-                                                </div>
-
-                                                <span className="shrink-0 bg-accent-wash text-accent font-body text-xs font-medium px-2.5 py-1 rounded-sm tabular-nums">
-                                                    {commitments}/6 Commitments
-                                                </span>
+                                                    </div>
+                                                )}
                                             </div>
-
-                                            <div className="space-y-2 text-sm">
-                                                <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">
-                                                    <Mail className="w-4 h-4 shrink-0" aria-hidden="true" />
-                                                    {app.email ? (
-                                                        <a
-                                                            href={`mailto:${app.email}`}
-                                                            className="truncate text-foreground hover:text-accent hover:underline transition-colors duration-150"
-                                                        >
-                                                            {app.email}
-                                                        </a>
-                                                    ) : (
-                                                        <span>No email provided</span>
-                                                    )}
-                                                </div>
-
-                                                <div className="flex items-center gap-2.5 text-muted-foreground min-w-0">
-                                                    <Phone className="w-4 h-4 shrink-0" aria-hidden="true" />
-                                                    {app.phone ? (
-                                                        <a
-                                                            href={toTelHref(app.phone)}
-                                                            className="truncate text-foreground hover:text-accent hover:underline transition-colors duration-150 tabular-nums"
-                                                        >
-                                                            {app.phone}
-                                                        </a>
-                                                    ) : (
-                                                        <span>No phone provided</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
-                                            <span className="font-accent text-xs text-muted-foreground tabular-nums">
-                                                {app.pastor_signature_date ? 'Pastor signed' : 'Pending pastor review'}
-                                            </span>
-                                            <Link
-                                                to={`/applications/${app.id}`}
-                                                className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors duration-150"
-                                            >
-                                                <span>Review Application</span>
-                                                <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                                            </Link>
-                                        </div>
-                                    </article>
-                                );
-                            })}
+                                        </article>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )
                 ) : members.length === 0 ? (
@@ -347,7 +516,7 @@ const Dashboard = () => {
                             No members in the directory yet
                         </h2>
                         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                            Members are added automatically when a new intake application is submitted.
+                            Members appear here once their intake application has been accepted.
                         </p>
                         <div className="pt-2">
                             <Link to="/intake" className={buttonStyles('primary')}>

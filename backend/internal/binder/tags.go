@@ -94,10 +94,11 @@ func seedTags(db *sql.DB) error {
 		INSERT OR IGNORE INTO member_tags (member_id, tag_name)
 		SELECT m.id, ?
 		FROM members m
-		WHERE NOT EXISTS (
+		WHERE m.membership_status = ?
+		  AND NOT EXISTS (
 			SELECT 1 FROM member_tags mt WHERE mt.member_id = m.id
 		)
-	`, DefaultMemberTag); err != nil {
+	`, DefaultMemberTag, MembershipStatusAccepted); err != nil {
 		return err
 	}
 

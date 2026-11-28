@@ -536,13 +536,13 @@ function SuccessScreen({
                     </h2>
                     <p className="text-base text-muted-foreground max-w-xl">
                         Thank you, <span className="text-foreground font-medium">{name}</span>. Your membership
-                        application has been recorded in the Digital Binder and is pending pastoral review.
+                        application has been recorded in the Digital Binder and is pending registrar review.
                     </p>
                 </div>
             </div>
 
             <p className="text-sm text-muted-foreground pt-5 border-t border-border">
-                A department lead or pastor will follow up with you once your application has been reviewed.
+                The registrar or a department lead will follow up with you once your application has been reviewed.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -711,7 +711,7 @@ const IntakePage = () => {
                         Membership Application
                     </h1>
                     <p className="text-base text-muted-foreground max-w-xl">
-                        Complete the four sections below to submit an intake record for pastoral review.
+                        Complete the four sections below to submit an intake record for registrar review.
                     </p>
                 </header>
 
