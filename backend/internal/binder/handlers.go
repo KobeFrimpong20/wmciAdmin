@@ -38,6 +38,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		admin.GET("/members", h.GetMembers)
 		admin.GET("/members/:id", h.GetMemberByID)
 		admin.PATCH("/members/:id/tags", h.PatchMemberTags)
+		admin.DELETE("/members/:id", h.DeleteMember)
 		admin.GET("/applications", h.GetApplications)
 		admin.GET("/applications/:id", h.GetApplicationByID)
 		admin.POST("/applications/:id/accept", h.AcceptApplication)
@@ -234,6 +235,28 @@ func (h *Handler) PatchMemberTags(c *gin.Context) {
 
 	m.Tags = tags
 	c.JSON(http.StatusOK, m)
+}
+
+func (h *Handler) DeleteMember(c *gin.Context) {
+	id := c.Param("id")
+
+	res, err := h.DB.ExecContext(c.Request.Context(), `DELETE FROM members WHERE id = ?`, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete member"})
+		return
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify member deletion"})
+		return
+	}
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Member not found"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 type queryRunner interface {
